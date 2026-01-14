@@ -20,7 +20,7 @@ return new class extends Migration {
 
       $table->decimal('total_amount', 12, 2)->default(0);   // إجمالي الإيرادات في الشيفت
       $table->decimal('total_expense', 12, 2)->default(0);  // إجمالي المصروفات في الشيفت
-
+      $table->decimal('deposited_amount', 12, 2)->default(0); // المبلغ الذي تم توريده
       $table->timestamps();
 
       $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');

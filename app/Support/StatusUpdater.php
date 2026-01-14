@@ -23,7 +23,7 @@ class StatusUpdater
     Booking::where('status', 'scheduled')
       ->where('start_at', '<=', now()) // كامل التاريخ والوقت
       ->update(['status' => 'due']);
-      
+
     Subscription::where('is_active', true)
       ->whereNotNull('visit_date')
       ->where('visit_date', '<=', now()->subDay()->toDateString()) // لو عدّى يوم
@@ -32,81 +32,117 @@ class StatusUpdater
       ->whereNotNull('visit_date')
       ->update(['attendees' => false]);
 
-
-    if ($user->hasRole('admin')){
-      $now=Carbon::now();
-      $todayMidnight = Carbon::today(); // اليوم 00:00 بحسب timezone التطبيق
+     $now = Carbon::now();
+    $todayMidnight = Carbon::today(); // 00:00
 
     // أحدث شيفت مفتوح (إن وجد)
     $openShift = Shift::where('user_id', $user->id)
-      ->whereNull('end_time')
-      ->latest('start_time')
-      ->first();
+        ->whereNull('end_time')
+        ->latest('start_time')
+        ->first();
 
-    // إذا فيه شيفت مفتوح وبدأ قبل منتصف الليل -> نغلقه عند منتصف الليل ونفتح شيفت جديد يبدأ عند منتصف الليل
-    if ($openShift) {
-      // لو الشيفت بدأ قبل بداية اليوم الحالي => لازم نقسمه (close عند midnight وفتح جديد)
-      if (Carbon::parse($openShift->start_time)->lt($todayMidnight)) {
-        
+    /*
+    |--------------------------------------------------------------------------
+    | حالة الموظف (role = user)
+    |--------------------------------------------------------------------------
+    */
+    if ($user->hasRole('user')) {
 
+        if ($openShift) {
 
-          // اغلاق الشيفت القديم عند بداية اليوم (midnight)
-          $openShift->end_time = $todayMidnight;
-          $openShift->duration = Carbon::parse($openShift->start_time)->diffInMinutes($todayMidnight);
-          $openShift->save();
+            // لو الشيفت بدأ قبل منتصف الليل
+            if (Carbon::parse($openShift->start_time)->lt($todayMidnight)) {
 
-          ShiftAction::create([
-            'shift_id' => $openShift->id,
-            'action_type' => 'end_shift',
-            'notes' => 'تم غلق الشيفت تلقائياً عند بداية اليوم (تقسيم شيفت بدأ قبل منتصف الليل)',
-            'amount' => 0,
-            'expense_amount' => 0,
-          ]);
+                // اغلاق الشيفت عند منتصف الليل
+                $openShift->end_time = $todayMidnight;
+                $openShift->duration = Carbon::parse($openShift->start_time)
+                    ->diffInMinutes($todayMidnight);
 
-          // تأكد أنه مفيش شيفت مفتوح تاني بعد الحفظ (حماية من تكرار)
-          $exists = Shift::where('user_id', $user->id)->whereNull('end_time')->exists();
+                $openShift->save();
 
-          if (!$exists) {
-            // نفتح شيفت جديد يبدأ عند منتصف الليل
-            $newShift = Shift::create([
-              'user_id' => $user->id,
-              'start_time' => $todayMidnight,
-              'total_amount' => 0,
-              'total_expense' => 0,
-            ]);
+                ShiftAction::create([
+                    'shift_id' => $openShift->id,
+                    'action_type' => 'end_shift',
+                    'notes' => 'تم غلق الشيفت تلقائياً عند بداية اليوم (موظف)',
+                    'amount' => 0,
+                    'expense_amount' => 0,
+                ]);
+            }
+        }
 
-            ShiftAction::create([
-              'shift_id' => $newShift->id,
-              'action_type' => 'start_shift',
-              'notes' => 'تم فتح شيفت تلقائياً بعد تقسيم الشيفت عند بداية اليوم',
-              'amount' => 0,
-              'expense_amount' => 0,
-            ]);
-          }
-
-
+        // ❌ مهم جدًا: لا نفتح شيفت جديد للموظف
         return;
-      }
+    }
 
-      // الحالة: فيه شيفت مفتوح وبدأ اليوم نفسه => لا نفعل شي الآن.
-      return;
-    }    
+    /*
+    |--------------------------------------------------------------------------
+    | حالة الأدمن (admin)
+    |--------------------------------------------------------------------------
+    */
+    if ($user->hasRole('admin')) {
+
+        if ($openShift) {
+
+            if (Carbon::parse($openShift->start_time)->lt($todayMidnight)) {
+
+                $openShift->end_time = $todayMidnight;
+                $openShift->duration = Carbon::parse($openShift->start_time)
+                    ->diffInMinutes($todayMidnight);
+
+                $openShift->save();
+
+                ShiftAction::create([
+                    'shift_id' => $openShift->id,
+                    'action_type' => 'end_shift',
+                    'notes' => 'تم غلق الشيفت تلقائياً عند بداية اليوم (تقسيم شيفت أدمن)',
+                    'amount' => 0,
+                    'expense_amount' => 0,
+                ]);
+
+                // فتح شيفت جديد للأدمن
+                $exists = Shift::where('user_id', $user->id)
+                    ->whereNull('end_time')
+                    ->exists();
+
+                if (!$exists) {
+
+                    $newShift = Shift::create([
+                        'user_id' => $user->id,
+                        'start_time' => $todayMidnight,
+                        'total_amount' => 0,
+                        'total_expense' => 0,
+                    ]);
+
+                    ShiftAction::create([
+                        'shift_id' => $newShift->id,
+                        'action_type' => 'start_shift',
+                        'notes' => 'تم فتح شيفت تلقائياً بعد بداية اليوم (أدمن)',
+                        'amount' => 0,
+                        'expense_amount' => 0,
+                    ]);
+                }
+
+                return;
+            }
+
+            return;
+        }
+
+        // لو مفيش شيفت مفتوح للأدمن → افتح شيفت جديد
         $newShift = Shift::create([
-          'user_id' => $user->id,
-          'start_time' => $todayMidnight,
-          'total_amount' => 0,
-          'total_expense' => 0,
+            'user_id' => $user->id,
+            'start_time' => $todayMidnight,
+            'total_amount' => 0,
+            'total_expense' => 0,
         ]);
 
         ShiftAction::create([
-          'shift_id' => $newShift->id,
-          'action_type' => 'start_shift',
-          'notes' => 'تم فتح شيفت تلقائياً لبداية اليوم (start_time = اليوم 00:00)',
-          'amount' => 0,
-          'expense_amount' => 0,
+            'shift_id' => $newShift->id,
+            'action_type' => 'start_shift',
+            'notes' => 'تم فتح شيفت تلقائياً لبداية اليوم (أدمن)',
+            'amount' => 0,
+            'expense_amount' => 0,
         ]);
-  
     }
   }
-
 }
