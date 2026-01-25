@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Admin\ShiftAdminController;
 use App\Http\Controllers\ShiftController;
+use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function () {
+  Route::get('/bookings/calendar', [ShiftController::class, 'calendar'])->name('bookings.calendar');
 
   Route::get('/shift-manager', [ShiftController::class, 'create'])->name('shift.create');
   Route::get('/shifts', [ShiftController::class, 'index'])->name('shift.index');

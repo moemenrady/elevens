@@ -6800,7 +6800,6 @@
             "extra": {
                 "laravel": {
                     "providers": [
-                        "Laravel\\Breeze\\BreezeServiceProvider"
                     ]
                 }
             },
@@ -6929,7 +6928,6 @@
             "extra": {
                 "laravel": {
                     "providers": [
-                        "Laravel\\Sail\\SailServiceProvider"
                     ]
                 }
             },
@@ -7142,7 +7140,6 @@
             "extra": {
                 "laravel": {
                     "providers": [
-                        "NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider"
                     ]
                 },
                 "branch-alias": {
@@ -7486,7 +7483,6 @@
                 },
                 "laravel": {
                     "providers": [
-                        "Pest\\Laravel\\PestServiceProvider"
                     ]
                 }
             },

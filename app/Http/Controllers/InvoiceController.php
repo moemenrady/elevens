@@ -66,11 +66,7 @@ class InvoiceController extends Controller
     $invoice->load([
       'client',
       'items',
-      'booking' => function ($query) {
-        $query->with([
-          'hall', // تحميل قاعة الحجز أو أي علاقة مرتبطة
-        ]);
-      },
+
     ]);
 
     // ترتيب البنود حسب النوع
@@ -239,32 +235,14 @@ class InvoiceController extends Controller
   {
     $validated = $request->validated();
     $user = Auth::user();
-    $openShift = Shift::where('user_id', $user->id)->whereNull('end_time')->first();
-    // داخل أي مكان (Controller أو Middleware)
-    if (!$openShift && !$user->hasRole('admin')) {
-      // نعلم الواجهة أننا محتاجين فتح شيفت
-      session()->flash('shift_required', true);
-      // برده نقدر نرجع رسالة خطأ للمستخدم
-      return redirect()->back()->with('error', '⚠️ لا يوجد شيفت مفتوح، ابدأ شيفت أولاً.');
-    }
 
-    // تحقق آمن من صلاحية الادمن
-    $isAdmin = $user->hasRole('admin');
-    if (!$openShift && !$isAdmin) {
-      session()->flash('shift_required', true);
-      return response()->json([
-        'status' => 'error',
-        'message' => "هناك خطأ غير مفهوم",
-        'requireShift' => true
-      ], 400);
-    }
 
     [$items, $totals] = $this->buildItemsFromRequest($validated['items']);
     $type = $this->determineInvoiceType($items);
 
     try {
 
-      $invoice = DB::transaction(function () use ($validated, $items, $totals, $type, $user, $openShift) {
+      $invoice = DB::transaction(function () use ($validated, $items, $totals, $type, $user, ) {
         // 1) جمع متطلبات المنتجات per product_id
         $productRequirements = [];
         foreach ($items as $it) {
@@ -284,12 +262,14 @@ class InvoiceController extends Controller
             $product = $products->get($pid);
             $available = $product ? $product->quantity : 0;
             if ($available < $requiredQty) {
-              $shortages[] = [
-                'product_id' => $pid,
-                'product_name' => $product ? $product->name : null,
-                'required' => $requiredQty,
-                'available' => $available
-              ];
+             $shortages[] = [
+  'product_id'   => $pid,
+  'product_name' => $product?->name ?? 'منتج غير معروف',
+  'required'     => $requiredQty,
+  'available'    => $available,
+  'missing'      => $requiredQty - $available
+];
+
             }
           }
 
@@ -313,9 +293,6 @@ class InvoiceController extends Controller
             'invoice_id' => $invoice->id,
             'item_type' => $it['item_type'],
             'product_id' => $it['product_id'] ?? null,
-            'subscription_id' => $it['subscription_id'] ?? null,
-            'booking_id' => $it['booking_id'] ?? null,
-            'session_id' => $it['session_id'] ?? null,
             'name' => $it['name'],
             'qty' => $it['qty'],
             'price' => $it['price'],
@@ -339,7 +316,6 @@ class InvoiceController extends Controller
           'actionable_type' => Invoice::class,
           'actionable_id' => $invoice->id,
           'invoice_id' => $invoice->id,
-          'shift_id' => $openShift?->id,
           'amount' => $invoice->total,
           'note' => "إنشاء فاتورة بيع منفصلة - #{$invoice->invoice_number}",
           'meta' => json_encode([
@@ -357,40 +333,21 @@ class InvoiceController extends Controller
 
       // لو وصل هنا معناه الفاتورة اتخلقت بنجاح والـ transaction انتهى commit
     } catch (\RuntimeException $e) {
+      
       if ((int) $e->getCode() === 422) {
         $shortages = json_decode($e->getMessage(), true);
-        return response()->json([
-          'status' => 'error',
-          'message' => 'كمية بعض المنتجات غير كافية لإتمام الفاتورة.',
-          'shortages' => $shortages
-        ], 400);
+       return response()->json([
+  'status' => 'error',
+  'message' => '❌ لا يمكن إتمام الفاتورة بسبب نقص في المخزون',
+  'shortages' => $shortages,
+  'hint' => 'يرجى تعديل الكميات أو تحديث المخزون'
+], 400);
+
       }
       throw $e;
     }
 
-    // ✅ سجّل الحركة في الشيفت بعد نجاح إنشاء الفاتورة (كالسابق)
-    if ($invoice && !$isAdmin) {
-      ShiftAction::create([
-        'shift_id' => $openShift->id,
-        'action_type' => 'separate_sale',
-        'invoice_id' => $invoice->id,
-        'expense_draft_id' => null,
-        'amount' => $invoice->total,
-        'expense_amount' => null,
-        'notes' => "عملية بيع منتجات (فاتورة رقم {$invoice->invoice_number})",
-      ]);
-    }
-    if ($invoice && $isAdmin) {
-      ShiftAction::create([
-        'shift_id' => $openShift->id,
-        'action_type' => 'separate_sale',
-        'invoice_id' => $invoice->id,
-        'expense_draft_id' => null,
-        'amount' => $invoice->total,
-        'expense_amount' => null,
-        'notes' => "عملية بيع منتجات (فاتورة رقم {$invoice->invoice_number})",
-      ]);
-    }
+   
 
 
     return response()->json([
@@ -428,67 +385,7 @@ class InvoiceController extends Controller
           'cost' => $cost,
           'total' => $total,
         ];
-      } elseif ($type === 'subscription') {
-        // TODO: هات الاشتراك الحقيقي من جدول subscriptions
-        // مؤقتًا نفترض جالك price مع الطلب
-        $qty = (int) ($in['qty'] ?? 1);
-        $price = (float) ($in['price'] ?? 0);
-        $cost = (float) ($in['cost'] ?? 0);
-
-        $items[] = [
-          'item_type' => 'subscription',
-          'subscription_id' => $in['subscription_id'] ?? null,
-          'name' => $in['name'] ?? 'اشتراك',
-          'qty' => $qty,
-          'price' => $price,
-          'cost' => $cost,
-          'total' => $price * $qty,
-        ];
-      } elseif ($type === 'booking') {
-        // TODO: هات بيانات الحجز من جدول bookings لو موجود
-        $qty = (int) ($in['qty'] ?? 1); // عدد الساعات مثلاً
-        $price = (float) ($in['price'] ?? 0);
-        $cost = (float) ($in['cost'] ?? 0);
-
-        $items[] = [
-          'item_type' => 'booking',
-          'booking_id' => $in['booking_id'] ?? null,
-          'name' => $in['name'] ?? 'حجز قاعة',
-          'qty' => $qty,
-          'price' => $price,
-          'cost' => $cost,
-          'total' => $price * $qty,
-        ];
-      } elseif ($type === 'session') {
-        // TODO: هات بيانات الجلسة من جدول sessions لو موجود (سعر الساعة)
-        $qty = (int) ($in['qty'] ?? 1); // عدد الساعات
-        $price = (float) ($in['price'] ?? 0);
-        $cost = (float) ($in['cost'] ?? 0);
-
-        $items[] = [
-          'item_type' => 'session',
-          'session_id' => $in['session_id'] ?? null,
-          'name' => $in['name'] ?? 'جلسة',
-          'qty' => $qty,
-          'price' => $price,
-          'cost' => $cost,
-          'total' => $price * $qty,
-        ];
-      } elseif ($type === 'deposit') {
-        // دفعة مقدمة (ممكن تكون لفاتورة مستقبلية أو لحجز)
-        $amount = (float) $in['amount'];
-        $desc = $in['description'] ?? null;
-
-        $items[] = [
-          'item_type' => 'deposit',
-          'name' => 'دفعة مقدمة',
-          'qty' => 1,
-          'price' => $amount,
-          'cost' => 0,
-          'total' => $amount,
-          'description' => $desc,
-        ];
-      }
+      } 
 
       $grandTotal += end($items)['total'];
       $grandProfit += (end($items)['price'] - end($items)['cost']) * end($items)['qty'];

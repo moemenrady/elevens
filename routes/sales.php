@@ -1,13 +1,14 @@
 <?php
 //الفواتير 
 
+use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\SaleProccess;
 
 Route::middleware('auth')->group(function () {
 
   Route::post('/invoices/preview', [InvoiceController::class, 'preview'])->name('invoices.preview');
-  Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+  Route::post('/invoice/store', [InvoiceController::class, 'store'])->name('invoices.store');
 
   Route::post('/invoices/print', [InvoiceController::class, 'print'])->name('invoices.print');
 

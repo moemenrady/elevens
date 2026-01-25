@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\ApiSystemActionController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\SystemActionController;
 use Illuminate\Support\Facades\Route;
@@ -35,11 +34,6 @@ Route::middleware('auth')->group(function () {
     return view('dashboard');
   })->middleware(['auth', 'verified',])->name('dashboard')->middleware("admin");
 
-  Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-  Route::get('/profile', [ProfileController::class, 'create'])->name('history.index');
-  Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-  Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
 
 });
 
@@ -55,17 +49,12 @@ Route::get('/error-system-data', function (Request $request) {
 
 require __DIR__ . '/auth.php';
 require __DIR__ . '/products.php';
-require __DIR__ . '/bookings.php';
-require __DIR__ . '/subscriptions.php';
 require __DIR__ . '/managment.php';
 require __DIR__ . '/clients.php';
 require __DIR__ . '/expenses.php';
 require __DIR__ . '/sales.php';
-require __DIR__ . '/sessions.php';
 require __DIR__ . '/main.php';
-require __DIR__ . '/halls.php';
 require __DIR__ . '/analytics.php';
 require __DIR__ . '/daily.php';
 require __DIR__ . '/invoices.php';
-require __DIR__ . '/setion_not_added.php';
 

@@ -10,6 +10,18 @@ use Illuminate\Support\Carbon;
 
 class ShiftController extends Controller
 {
+
+  public function calendar(Request $request)
+  {
+    $year = (int) $request->input('year', now()->year);
+    $month = (int) $request->input('month', now()->month);
+
+    // بداية ونهاية الشهر (بنقاط زمنية كاملة)
+    $monthStart = Carbon::create($year, $month, 1)->startOfDay();
+    $monthEnd = (clone $monthStart)->endOfMonth()->endOfDay();
+$grouped=[];
+    return response()->json($grouped);
+  }
   public function deposit(Request $request, $shiftId)
   {
     $shift = Shift::findOrFail($shiftId);
@@ -144,6 +156,7 @@ class ShiftController extends Controller
   }
 
 
+
   public function create()
   {
     $user = Auth::user();
@@ -229,7 +242,7 @@ class ShiftController extends Controller
   }
   public function prompt()
   {
-    $user = \Auth::user();
+    $user = Auth::user();
 
     $openShift = Shift::where('user_id', $user->id)
       ->whereNull('end_time')
@@ -283,7 +296,7 @@ class ShiftController extends Controller
     $openShift = Shift::where('user_id', $user->id)
       ->whereNull('end_time')
       ->first();
-    $isAdmin = $user->hasRole('admin');
+    $isAdmin = $user->role === 'admin' || ($user->roles && $user->roles->contains('name', 'admin'));
     if ($openShift && !$isAdmin) {
       return response()->json([
         'open' => true,

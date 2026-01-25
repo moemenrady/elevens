@@ -47,12 +47,13 @@ class User extends Authenticatable implements MustVerifyEmail
       'password' => 'hashed',
     ];
   }
+    public function hasRole($role)
+  {
+    return $this->role === $role;
+  }
   public function invoice()
   {
     return $this->hasMany(Invoice::class, 'client_id', 'id');
   }
-  public function hasRole($role)
-  {
-    return $this->role === $role;
-  }
+
 }

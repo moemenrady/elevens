@@ -15,11 +15,8 @@ return new class extends Migration {
       $table->unsignedBigInteger('invoice_id');
 
       // نوع البند ومرجعه
-      $table->enum('item_type', ['product', 'subscription', 'booking', 'session', 'deposit']);
+      $table->enum('item_type', ['product',]);
       $table->unsignedBigInteger('product_id')->nullable();
-      $table->unsignedBigInteger('subscription_id')->nullable();
-      $table->unsignedBigInteger('booking_id')->nullable();
-      $table->unsignedBigInteger('session_id')->nullable();
 
       // بيانات البند وقت البيع (immutable snapshot)
       $table->string('name');                    // الاسم وقت البيع (حتى لو اتغير لاحقًا)

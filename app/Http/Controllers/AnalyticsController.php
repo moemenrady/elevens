@@ -52,14 +52,11 @@ class AnalyticsController extends Controller
    */
   public function all()
   {
-    $Booking = $this->modelIfExists('Booking');
     $Client = $this->modelIfExists('Client');
     $Product = $this->modelIfExists('Product');
     $Payment = $this->modelIfExists('Payment'); // أو Transaction, Receipt حسب مشروعك
-    $Subscription = $this->modelIfExists('Subscription');
 
     // إجماليات بسيطة
-    $totalBookings = $this->countModel($Booking);
     $totalClients = $this->countModel($Client);
     $totalProducts = $this->countModel($Product);
 
@@ -85,7 +82,6 @@ class AnalyticsController extends Controller
     $churn = null;
 
     return view('analytics.all', compact(
-      'totalBookings',
       'totalClients',
       'totalProducts',
       'totalRevenue',
@@ -95,43 +91,6 @@ class AnalyticsController extends Controller
     ));
   }
 
-  /**
-   * تحليل الحجوزات
-   */
-  public function bookings()
-  {
-    $Booking = $this->modelIfExists('Booking');
-    $Hall = $this->modelIfExists('Hall');
-
-    $totalBookings = $this->countModel($Booking);
-    $cancelled = $Booking ? $Booking::query()->where('status', 'cancelled')->count() : null;
-
-    // متوسط مدة لو عندك عمود duration_minutes
-    $avgDuration = null;
-    if ($Booking) {
-      try {
-        $avgDuration = $Booking::query()->avg('duration_minutes');
-        $avgDuration = $avgDuration !== null ? round($avgDuration, 1) : null;
-      } catch (\Throwable $e) {
-        $avgDuration = null;
-      }
-    }
-
-    $latestBookings = [];
-    if ($Booking) {
-      try {
-        $latestBookings = $Booking::query()->latest('start_at')->take(10)->get();
-      } catch (\Throwable $e) {
-        $latestBookings = [];
-      }
-    }
-
-    return view('analytics.bookings', compact('totalBookings', 'cancelled', 'avgDuration', 'latestBookings'));
-  }
-
-  /**
-   * تحليل العملاء
-   */
   public function clients()
   {
     $Client = $this->modelIfExists('Client');
@@ -236,10 +195,10 @@ class AnalyticsController extends Controller
     // 3) إجمالي المصاريف
     // ================================
     $productsMaterialExpenseId = ExpenseType::where('is_product_material', true)->value('id');
-    
+
     $totalExpenses = (clone $expenseQuery)->where('expense_type_id', '!=', $productsMaterialExpenseId)->sum('amount');
 
-  // ================================
+    // ================================
     // 4) إجمالي شراء المنتجات
     // ================================
 
@@ -252,7 +211,7 @@ class AnalyticsController extends Controller
     // 4) صافي الربح
     // ================================
 
-    $netProfit = $totalIncome - ($totalExpenses+$productInvoiceItems);
+    $netProfit = $totalIncome - ($totalExpenses + $productInvoiceItems);
 
     // ================================
     // 5) نسبة الربح
@@ -316,41 +275,13 @@ class AnalyticsController extends Controller
       'growthRate' => $growthRate,
       'topIncomeDay' => $topIncomeDay,
       'topService' => $topService,
-      'productInvoiceItems'=>$productInvoiceItems,
+      'productInvoiceItems' => $productInvoiceItems,
     ]);
   }
 
 
 
-  /**
-   * تحليل الخطط (Plans)
-   */
-  public function plans()
-  {
-    $Subscription = $this->modelIfExists('Subscription');
-    $Plan = $this->modelIfExists('Plan');
 
-    $subscribers = $this->countModel($Subscription);
-    $topPlan = null;
-
-    if ($Subscription && $Plan) {
-      try {
-        $row = $Subscription::query()
-          ->selectRaw('plan_id, count(*) as cnt')
-          ->groupBy('plan_id')
-          ->orderByDesc('cnt')
-          ->first();
-        if ($row && $row->plan_id) {
-          $p = $Plan::find($row->plan_id);
-          $topPlan = $p ? $p->name : null;
-        }
-      } catch (\Throwable $e) {
-        $topPlan = null;
-      }
-    }
-
-    return view('analytics.plans', compact('subscribers', 'topPlan'));
-  }
 
   /**
    * تحليل المنتجات

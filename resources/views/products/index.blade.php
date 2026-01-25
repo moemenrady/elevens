@@ -3,412 +3,310 @@
 @section('page_title', 'المخزن')
 
 <style>
+    :root {
+        --prime: #ddcdbc;
+        --prime-soft: #e6ddd4;
+        --bg: #515831;
+        --bg-dark: #3f4526;
+        --white: #ffffff;
+    }
+
+    /* الخلفية العامة */
     body {
-        font-family: "Tahoma", sans-serif;
-        background: linear-gradient(to bottom, #fff, #fce9d9);
-        margin: 0;
-        padding: 0;
-        color: #333;
+        background: linear-gradient(-45deg, var(--bg), var(--bg-dark), var(--bg));
+        background-size: 400% 400%;
+        animation: gradientMove 14s ease infinite;
+        color: var(--white);
+        font-family: system-ui, sans-serif;
+    }
+
+    @keyframes gradientMove {
+        0% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+
+        100% {
+            background-position: 0% 50%;
+        }
     }
 
     .container {
-        max-width: 1200px;
-        margin: 0 auto;
+        max-width: 1300px;
+        margin: auto;
         padding: 30px 20px;
     }
 
     /* العدادين */
+    .stats-row {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-bottom: 30px;
+    }
+
     .stats-box {
-        background: #fdf6f0;
-        padding: 20px;
-        border-radius: 15px;
+        background: rgba(221, 205, 188, 0.15);
+        backdrop-filter: blur(14px);
+        padding: 20px 30px;
+        border-radius: 18px;
         text-align: center;
-        width: 220px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-        font-size: 15px;
-        margin: 10px;
-        flex-shrink: 0;
+        min-width: 220px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
     }
 
     .stats-box p:first-child {
-        margin: 0;
-        font-weight: bold;
-        color: #444;
-        font-size: 16px;
+        color: var(--prime-soft);
+        font-weight: 700;
     }
 
     .stats-box p:last-child {
-        margin: 10px 0 0;
-        font-size: 22px;
-        color: #333;
+        font-size: 28px;
+        font-weight: 900;
+        color: var(--prime);
     }
 
-    /* زرار الإضافة */
-    #addButton {
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        border: none;
-        background: #ffcb9a;
-        font-size: 48px;
-        font-weight: bold;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        transition: 0.3s;
-        margin: 0 40px;
-        flex-shrink: 0;
-    }
+/* زر الإضافة الجديد */
+#addButton {
+    top: 80px; /* المسافة من الأعلى */
+    right: 40px; /* المسافة من اليمين */
+    width: 120px;
+    height: 50px;
+    border-radius: 12px; /* مش دايرة كاملة */
+    border: none;
+    background: linear-gradient(135deg, var(--prime), var(--prime-soft));
+    color: var(--bg);
+    font-size: 28px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, .35);
+    transition: .3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
-    #addButton:hover {
-        background: #ffa94d;
-        transform: scale(1.05);
-    }
+#addButton:hover {
+    transform: scale(1.05) translateY(-2px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.45);
+}
 
-    /* الصف الأول (عدادات + زرار) */
-    .header-row {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-bottom: 40px;
-    }
 
-    /* مربع البحث */
+
+    /* البحث */
     .search-box {
-        margin: 20px auto;
         text-align: center;
+        margin-bottom: 30px;
     }
 
     .search-box input {
-        padding: 14px 20px;
-        width: 450px;
+        width: 420px;
         max-width: 100%;
-        border-radius: 25px;
-        border: 1px solid #ddd;
-        font-size: 15px;
+        padding: 14px 20px;
+        border-radius: 20px;
+        border: none;
         outline: none;
-        transition: 0.2s;
-        background: #fff;
+        background: rgba(221, 205, 188, 0.2);
+        color: var(--white);
+        font-size: 15px;
     }
 
-    .search-box input:focus {
-        border-color: #ffcb9a;
-        box-shadow: 0 0 6px rgba(255, 170, 80, 0.5);
+    .search-box input::placeholder {
+        color: var(--prime-soft);
     }
 
-    /* الجدول */
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        background: transparent;
+    /* كروت المنتجات */
+    .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 22px;
+    }
+
+    .product-card {
+        background: rgba(221, 205, 188, 0.15);
+        backdrop-filter: blur(14px);
+        border-radius: 20px;
+        padding: 18px;
+        box-shadow: 0 15px 40px rgba(0, 0, 0, .35);
+        cursor: pointer;
+        transition: .3s ease;
+        border: 1px solid rgba(221, 205, 188, 0.25);
+    }
+
+    .product-card:hover {
+        transform: translateY(-6px) scale(1.02);
+        background: rgba(221, 205, 188, 0.25);
+    }
+
+    .product-title {
+        font-weight: 900;
+        font-size: 17px;
+        color: var(--prime);
+        margin-bottom: 8px;
+    }
+
+    .product-info {
+        font-size: 14px;
+        color: var(--prime-soft);
+        margin: 4px 0;
+    }
+
+    .product-badge {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 6px 12px;
         border-radius: 12px;
-        overflow: hidden;
-        margin-top: 20px;
-    }
-
-    thead {
-        background: rgba(255, 224, 178, 0.8);
-    }
-
-    thead th {
-        padding: 16px 20px;
-        text-align: center;
-        font-size: 15px;
-        font-weight: bold;
-        color: #444;
-    }
-
-    tbody tr {
-        border-bottom: 1px solid #eee;
-        text-align: center;
-        transition: background 0.2s;
-    }
-
-    tbody tr:hover {
-        background: rgba(255, 247, 240, 0.7);
-    }
-
-    tbody td {
-        padding: 14px 18px;
-        font-size: 15px;
-        color: #333;
-    }
-
-    /* الموبايل */
-    @media (max-width: 768px) {
-        .header-row {
-            flex-direction: column;
-        }
-
-        #addButton {
-            width: 80px;
-            height: 80px;
-            font-size: 36px;
-            margin: 15px 0;
-        }
-
-        .search-box input {
-            width: 100%;
-        }
-
-        table,
-
-        thead,
-
-        tbody,
-
-        th,
-
-        td,
-
-        tr {
-            display: block;
-            width: 100%;
-        }
-
-        thead {
-            display: none;
-        }
-
-        tbody tr {
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.9);
-        }
-
-        tbody td {
-            text-align: right;
-            padding: 8px 10px;
-            position: relative;
-            font-size: 14px;
-        }
-
-        tbody td::before {
-            content: attr(data-label);
-            position: absolute;
-            left: 10px;
-            font-weight: bold;
-            color: #666;
-        }
+        background: linear-gradient(135deg, var(--prime), var(--prime-soft));
+        color: var(--bg);
+        font-weight: 800;
+        font-size: 13px;
     }
 </style>
 
 @section('content')
-
     <div class="container">
 
         {{-- الإشعارات --}}
-
         @if (session('success'))
-            <div style="background: #d4edda; padding: 12px; margin-bottom: 20px; border-radius: 8px; color:#155724;">
-                {{ session('success') }}
-            </div>
+            <div class="snackbar success">{{ session('success') }}</div>
         @endif
 
         @if (session('error'))
-            <div style="background: #f8d7da; padding: 12px; margin-bottom: 20px; border-radius: 8px; color:#721c24;">
-                {{ session('error') }}
-            </div>
+            <div class="snackbar error">{{ session('error') }}</div>
         @endif
 
-        {{-- العدادين وزرار الإضافة --}}
-
-        <div class="header-row">
-
+        {{-- العدادين + زر الإضافة --}}
+        <div class="stats-row">
             <div class="stats-box">
-
                 <p>عدد المنتجات</p>
-
                 <p>{{ $countItems }}</p>
-
             </div>
 
             <button id="addButton" data-bs-toggle="modal" data-bs-target="#chooseActionModal">+</button>
 
-
             <div class="stats-box">
-
                 <p>عدد الأصناف</p>
-
                 <p>{{ $countProducts }}</p>
-
             </div>
-
         </div>
 
         {{-- البحث --}}
-
         <div class="search-box">
-
-            <input type="text" id="searchBox" placeholder="🔍 بحث عن منتج">
-
+            <input type="text" id="searchBox" placeholder="🔍 ابحث عن منتج">
         </div>
 
-        {{-- الجدول --}}
+        {{-- الكروت --}}
+        <div class="products-grid" id="productsGrid">
+            @foreach ($products as $product)
+                <div class="product-card">
 
-        <table>
+                    <div class="product-title">{{ $product->name }}</div>
 
-            <thead>
+                    <div class="product-info">💰 السعر: {{ $product->price }}</div>
+                    <div class="product-info">📦 التكلفة: {{ $product->cost }}</div>
+                    <div class="product-info">🔢 الكمية: {{ $product->quantity }}</div>
 
-                <tr>
-
-                    <th>المعرف</th>
-
-                    <th>اسم المنتج</th>
-
-                    <th>السعر</th>
-
-                    <th>التكلفة</th>
-
-                    <th>العدد</th>
-
-                </tr>
-
-            </thead>
-
-          <tbody id="productTable">
-    @foreach ($products as $product)
-        <tr data-href="{{ route('products.show', $product->id) }}" style="cursor: pointer;">
-            <td data-label="المعرف">{{ $product->id }}</td>
-            <td data-label="اسم المنتج">{{ $product->name }}</td>
-            <td data-label="السعر">{{ $product->price }}</td>
-            <td data-label="التكلفة">{{ $product->cost }}</td>
-            <td data-label="العدد">{{ $product->quantity }}</td>
-        </tr>
-    @endforeach
-</tbody>
-
-        </table>
+                    <span class="product-badge">ID #{{ $product->id }}</span>
+                </div>
+            @endforeach
+        </div>
     </div>
-<script>
-    // جعل الصف قابل للنقر لعرض تفاصيل المنتج
-    document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('#productTable tr').forEach(row => {
-            row.addEventListener('click', function () {
-                const url = this.dataset.href;
-                if (url) {
-                    window.location.href = url;
-                }
-            });
-        });
-    });
-</script>
 
+    
+
+    {{-- البحث AJAX --}}
     <script>
-        // البحث AJAX
         document.getElementById('searchBox').addEventListener('keyup', function() {
             let query = this.value;
 
             fetch("{{ route('products.search') }}?query=" + query)
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
-                    let tbody = document.getElementById('productTable');
-                    tbody.innerHTML = "";
+                    let grid = document.getElementById('productsGrid');
+                    grid.innerHTML = "";
 
-                    if (data.length > 0) {
-                        data.forEach(item => {
-                            tbody.innerHTML += `
-                        <tr>
-                            <td data-label="المعرف">${item.id}</td>
-                            <td data-label="اسم المنتج">${item.name}</td>
-                            <td data-label="السعر">${item.price}</td>
-                            <td data-label="التكلفة">${item.cost}</td>
-                            <td data-label="العدد">${item.quantity}</td>
-                        </tr>
-                    `;
-                        });
+                    if (!data.length) {
+                        grid.innerHTML =
+                            `<p style="grid-column:1/-1;text-align:center;color:var(--prime-soft)">لا توجد نتائج</p>`;
+                        return;
                     }
+
+                    data.forEach(item => {
+                        grid.innerHTML += `
+                    <div class="product-card" data-href="/products/${item.id}">
+                        <div class="product-title">${item.name}</div>
+                        <div class="product-info">💰 السعر: ${item.price}</div>
+                        <div class="product-info">📦 التكلفة: ${item.cost}</div>
+                        <div class="product-info">🔢 الكمية: ${item.quantity}</div>
+                        <span class="product-badge">ID #${item.id}</span>
+                    </div>
+                `;
+                    });
+
+                    document.querySelectorAll('.product-card').forEach(card => {
+                        card.addEventListener('click', function() {
+                            window.location.href = this.dataset.href;
+                        });
+                    });
                 });
         });
-
-        // زرار الإضافة
-        document.getElementById('addButton').addEventListener('click', function() {
-
-        });
     </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('searchProduct');
+    const resultsList = document.getElementById('searchResults');
+    const form = document.getElementById('addQuantityForm');
+    const productIdInput = document.getElementById('product_id');
 
+    searchInput.addEventListener('keyup', function () {
+        const query = this.value.trim();
 
+        if (!query) {
+            resultsList.innerHTML = '';
+            form.style.display = 'none';
+            return;
+        }
 
+        fetch(`{{ route('products.search') }}?query=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+                resultsList.innerHTML = '';
+
+                if (!data.length) {
+                    resultsList.innerHTML = `<li class="list-group-item text-center text-muted">لا توجد نتائج</li>`;
+                    form.style.display = 'none';
+                    return;
+                }
+
+                data.forEach(product => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item list-group-item-action';
+                    li.textContent = `${product.name} | الكمية: ${product.quantity}`;
+                    li.style.cursor = 'pointer';
+                    li.addEventListener('click', () => {
+                        productIdInput.value = product.id;
+                        searchInput.value = product.name;
+                        resultsList.innerHTML = '';
+                        form.style.display = 'block';
+                    });
+                    resultsList.appendChild(li);
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                resultsList.innerHTML = `<li class="list-group-item text-center text-danger">حدث خطأ</li>`;
+            });
+    });
+});
+</script>
 
     {{-- المودالات --}}
     @include('products.modals.choose-action')
     @include('products.modals.add-product')
     @include('products.modals.add-quantity')
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const addQtyModal = document.getElementById('addQuantityModal');
-            if (!addQtyModal) return;
-
-            // لما المودال يفتح
-            addQtyModal.addEventListener('shown.bs.modal', function() {
-                const searchInput = document.getElementById('searchProduct');
-                const resultsList = document.getElementById('searchResults');
-                const form = document.getElementById('addQuantityForm');
-                const productIdInput = document.getElementById('product_id');
-
-                if (!searchInput || !resultsList || !form || !productIdInput) return;
-
-                // reset كل مرة يفتح فيها المودال
-                searchInput.value = '';
-                resultsList.innerHTML = '';
-                form.style.display = 'none';
-                productIdInput.value = '';
-                searchInput.focus();
-
-                // علشان ما نربطش نفس الحدث أكتر من مرة
-                if (searchInput.dataset.bound === '1') return;
-                searchInput.dataset.bound = '1';
-
-                // السيرش
-                searchInput.addEventListener('keyup', function() {
-                    const q = this.value.trim();
-                    if (q.length < 1) {
-                        resultsList.innerHTML = '';
-                        form.style.display = 'none';
-                        return;
-                    }
-
-                    fetch("{{ route('products.search') }}?query=" + encodeURIComponent(q))
-                        .then(res => res.json())
-                        .then(items => {
-                            resultsList.innerHTML = '';
-
-                            if (!items.length) {
-                                resultsList.innerHTML =
-                                    '<li class="list-group-item text-center text-muted">لا توجد نتائج</li>';
-                                form.style.display = 'none';
-                                return;
-                            }
-
-                            items.forEach(item => {
-                                const li = document.createElement('li');
-                                li.className = 'list-group-item list-group-item-action';
-                                li.style.cursor = 'pointer';
-                                li.textContent = `${item.name} (المعرف: ${item.id})`;
-
-                                li.addEventListener('click', function() {
-                                    productIdInput.value = item.id;
-                                    form.action =
-                                        "{{ route('products.addQuantity', ':id') }}"
-                                        .replace(':id', item.id);
-
-                                    form.style.display = 'block';
-                                    resultsList.innerHTML = '';
-                                    searchInput.value = item.name;
-                                });
-
-                                resultsList.appendChild(li);
-                            });
-                        })
-                        .catch(err => {
-                            console.error('Search error:', err);
-                        });
-                });
-            });
-        });
-    </script>
 
 @endsection

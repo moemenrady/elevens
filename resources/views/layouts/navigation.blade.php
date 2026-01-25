@@ -1,40 +1,20 @@
-        <button class="drawer-toggle" onclick="toggleDrawer()">☰</button>
-
-        <nav class="navbar">
-            <!-- زرار الـ Drawer -->
-
-
-            <a href="{{ route('main.create') }}" class={{ Request::is('/') || Request::is('main') ? 'active' : '' }}>
-                الرئيسية
-            </a>
-            <a href="{{ route('expenses.index') }}" class={{ Request::is('expenses') ? 'active' : '' }}>
-                المصروفات
-            </a>
-            <a href="{{ route('subscriptions.index') }}" class={{ Request::is('subscriptions') ? 'active' : '' }}>
-                الاشتراكات
-            </a>
-            <a href="{{ route('clients.index') }}" class={{ Request::is('clients') ? 'active' : '' }}>
-                العملاء
-            </a>
-            @if (Auth::user()->role === 'user')
-                <a href="{{ route('shift.index') }}" class={{ Request::is('shift') ? 'active' : '' }}>
-                    الشفتات
-                </a>
-                @endif
+<nav class="main-navbar">
+    <a href="{{ route('main.create') }}" class="nav-link {{ Request::is('/') || Request::is('main') ? 'active' : '' }}">
+        <i class="fa-solid fa-house"></i>
+        <span>الرئيسية</span>
+    </a> <a href="{{ route('products.index') }}" class="nav-link {{ Request::is('products') ? 'active' : '' }}">
+        <i class="fa-solid fa-box"></i>
+        <span>المخزن</span>
+    </a>
 
 
+    {{-- @if (Auth::user()->role === 'admin')
 
 
-            @if (Auth::user()->role === 'admin')
-                <a href="{{ route('products.index') }}" class={{ Request::is('products') ? 'active' : '' }}>
-                    المخزن
-                </a>
-                <a href="{{ route('managment.create') }}" class={{ Request::is('managment') ? 'active' : '' }}>
-                    الأدارة
-                </a>
-            @endif
-
-
-
-
-        </nav>
+        <a href="{{ route('managment.create') }}" 
+           class="nav-link {{ Request::is('managment') ? 'active' : '' }}">
+            <i class="fa-solid fa-gear"></i>
+            <span>الإدارة</span>
+        </a>
+    @endif --}}
+</nav>

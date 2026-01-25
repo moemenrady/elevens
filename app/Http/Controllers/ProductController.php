@@ -22,7 +22,8 @@ class ProductController extends Controller
 
   public function create()
   {
-    return view('products.create');
+    $products = Product::all();
+    return view('products.create', compact('products'));
   }
   public function createImportant()
   {
@@ -32,7 +33,6 @@ class ProductController extends Controller
     // $products = \App\Models\Product::take(30)->get();
 
     return view('managment.changes.important_products.create', compact('importantProducts'));
-
   }
   public function storeImportant(Request $request)
   {
@@ -120,41 +120,41 @@ class ProductController extends Controller
     return view('products.add-quantity');
   }
   public function store(Request $request)
-{
+  {
     // 1️⃣ Validation كامل
     $request->validate([
-        'product_id'   => 'required|integer',
-        'name'         => 'required|string|max:255',
-        'price'        => 'required|numeric|min:0',
-        'cost'         => 'required|numeric|min:0',
-        'quantity'     => 'required|integer|min:0',
-        'min_quantity' => 'required|integer|min:0',
+      'product_id'   => 'required|integer',
+      'name'         => 'required|string|max:255',
+      'price'        => 'required|numeric|min:0',
+      'cost'         => 'required|numeric|min:0',
+      'quantity'     => 'required|integer|min:0',
+      'min_quantity' => 'required|integer|min:0',
     ]);
 
     // 2️⃣ تحقق من تكرار ID
     if (Product::where('id', $request->product_id)->exists()) {
-        return redirect()->back()->with('error', "هذا الـ ID موجود بالفعل في المخزن ❕");
+      return redirect()->back()->with('error', "هذا الـ ID موجود بالفعل في المخزن ❕");
     }
 
     // 3️⃣ تحقق من تكرار الاسم
     if (Product::where('name', $request->name)->exists()) {
-        return redirect()->back()->with('error', "هذا المنتج موجود في المخزن ❕");
+      return redirect()->back()->with('error', "هذا المنتج موجود في المخزن ❕");
     }
 
     // 4️⃣ إدخال البيانات مع timestamps
     Product::create([
-        'id'           => $request->product_id,
-        'name'         => $request->name,
-        'price'        => $request->price,
-        'cost'         => $request->cost,
-        'quantity'     => $request->quantity,
-        'min_quantity' => $request->min_quantity,
-        'created_at'   => now(),
-        'updated_at'   => now(),
+      'id'           => $request->product_id,
+      'name'         => $request->name,
+      'price'        => $request->price,
+      'cost'         => $request->cost,
+      'quantity'     => $request->quantity,
+      'min_quantity' => $request->min_quantity,
+      'created_at'   => now(),
+      'updated_at'   => now(),
     ]);
 
     return redirect()->back()->with('success', 'تمت إضافة المنتج بنجاح ✅');
-}
+  }
 
   public function addQuantity(Request $request, $id)
   {
@@ -168,57 +168,57 @@ class ProductController extends Controller
 
     return redirect()->route('products.index')->with('success', 'تمت إضافة الكمية بنجاح ✅');
   }
-public function searchId(Request $request)
-{
+  public function searchId(Request $request)
+  {
     $code = trim($request->get('query'));
 
     if (!$code || strlen($code) < 5) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'كود غير صالح'
-        ], 422);
+      return response()->json([
+        'status' => 'error',
+        'message' => 'كود غير صالح'
+      ], 422);
     }
 
     $products = Product::where('id', $code)
-        ->select('id', 'name', 'price', 'cost', 'quantity')
-        ->limit(2)
-        ->get();
+      ->select('id', 'name', 'price', 'cost', 'quantity')
+      ->limit(2)
+      ->get();
 
     if ($products->count() === 1) {
-        return response()->json([
-            'status' => 'success',
-            'type' => 'single',
-            'product' => $products->first()
-        ]);
+      return response()->json([
+        'status' => 'success',
+        'type' => 'single',
+        'product' => $products->first()
+      ]);
     }
 
     if ($products->count() > 1) {
-        return response()->json([
-            'status' => 'warning',
-            'type' => 'multiple',
-            'products' => $products
-        ]);
+      return response()->json([
+        'status' => 'warning',
+        'type' => 'multiple',
+        'products' => $products
+      ]);
     }
 
     return response()->json([
-        'status' => 'not_found',
-        'message' => 'المنتج غير موجود'
+      'status' => 'not_found',
+      'message' => 'المنتج غير موجود'
     ], 404);
-}
+  }
 
 
-  
+
   public function search(Request $request)
   {
     $query = $request->get('query');
 
-    $results = Product::where('name', 'LIKE', "%{$query}%")
-      ->orWhere('id', $query)
-      ->select('id', 'name', 'price', 'cost', 'quantity') // هات اللي محتاجه
-      ->limit(10)
+    $results = Product::when($query, function ($q) use ($query) {
+      $q->where('name', 'LIKE', "%{$query}%")
+        ->orWhere('id', $query);
+    })
+      ->select('id', 'name', 'price', 'cost', 'quantity')
       ->get();
 
     return response()->json($results);
   }
-
 }

@@ -22,14 +22,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        View::composer('session.modal.start-booking', function ($view) {
-        $view->with('halls', Hall::all());
-        
-    });
-
-            View::composer('main.create', function ($view) {
-        $view->with('newSessions', SetionNotAdded::all());
-        
-    });
+    
     }
 }

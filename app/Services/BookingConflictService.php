@@ -1,7 +1,6 @@
 <?php
 namespace App\Services;
 
-use App\Models\Booking;
 use Carbon\Carbon;
 
 class BookingConflictService

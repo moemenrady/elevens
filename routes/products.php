@@ -15,6 +15,8 @@ Route::get('/products/create', [ProductController::class, 'create'])->name('prod
 Route::post('/products/store', [ProductController::class, 'store'])->name('products.store');
 
 // عرض صفحة كمية منتج موجود 
+// routes/web.php
+
 Route::get('/products/add-quantity-page', [ProductController::class, 'addQuantityPage'])->name('products.addQuantityPage');
 
 // تخزين كمية منتج موجود في db

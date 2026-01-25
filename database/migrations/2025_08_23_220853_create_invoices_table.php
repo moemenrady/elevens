@@ -14,11 +14,7 @@ return new class extends Migration {
     $table->id();
     $table->string('invoice_number')->unique(); // INV-20250825-0001
 
-    $table->foreignId('booking_id')
-        ->nullable()
-        ->unique()
-        ->constrained('bookings')
-        ->nullOnDelete();
+  
 
     $table->foreignId('client_id')
         ->nullable()

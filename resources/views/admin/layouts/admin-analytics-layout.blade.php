@@ -15,14 +15,14 @@
 
   <style>
     :root{
-      --bg: #ffffff;
+      /* --bg: #ffffff;
       --text: #0b0b0c;
       --muted: rgba(11,11,12,0.6);
       --prime: #E6C7FF;
       --card-bg: #ffffff;
       --glass: rgba(230,199,255,0.08);
       --radius: 12px;
-      --shadow-sm: 0 6px 20px rgba(11,11,12,0.06);
+      --shadow-sm: 0 6px 20px rgba(11,11,12,0.06); */
     }
 
     /* global */
