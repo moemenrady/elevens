@@ -1,4 +1,5 @@
-<?php
+<!-- 
+php
 use Illuminate\Support\Facades\Route;
 
 
@@ -24,4 +25,4 @@ Route::prefix('analytics')->name('analytics.')->middleware('auth')->group(functi
 
 
 
-
+ -->

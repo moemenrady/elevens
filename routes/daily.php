@@ -1,4 +1,4 @@
-<?php
+<!-- php
 
 use App\Http\Controllers\Admin\ShiftAdminController;
 use App\Http\Controllers\ShiftController;
@@ -29,4 +29,4 @@ Route::middleware(['auth', 'admin'])->group(function () {
 });
 
 
-
+ -->

@@ -1,4 +1,4 @@
-<?php
+<!-- php
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\ExpenseController;
@@ -24,4 +24,4 @@ Route::middleware('auth')->group(function () {
 
 });
 
-
+ -->

@@ -15,74 +15,41 @@
             <span class="invoice-date">{{ $invoice->created_at->format('d/m/Y') }}</span>
         </div>
 
-        <!-- Client Info -->
-        @if (!in_array($invoiceType, ['product']))
-        <div class="invoice-section">
-            <div class="glass-box">
-                <p><strong>العميل:</strong> {{ $invoice->client->name ?? 'غير معروف' }} ({{ $invoice->client->id ?? '-' }})</p>
-            </div>
+      
+      @if ($purchaseItems->isNotEmpty())
+<div class="invoice-section">
+    <h3>🛒 المنتجات المباعة</h3>
+
+    <div class="purchase-table">
+        <div class="purchase-head">
+            <span>المنتج</span>
+            <span>التفاصيل</span> <span>الكمية</span>
+            <span>السعر</span>
+            <span>الإجمالي</span>
         </div>
-        @endif
 
-        <!-- Subscriptions -->
-        @if (in_array($invoiceType, ['subscription', 'mixed']))
-        <div class="invoice-section">
-            <h3>📦 الاشتراكات</h3>
-            @foreach ($groupedItems['subscription'] as $item)
-                <div class="glass-box">
-                    <p>الخطة: {{ $item->name }}</p>
-                    <p>السعر: {{ $item->price }} ج</p>
-                </div>
-            @endforeach
-        </div>
-        @endif
-
-        <!-- Bookings -->
-        @if (in_array($invoiceType, ['booking', 'mixed']))
-        <div class="invoice-section">
-            <h3>🏢 الحجز</h3>
-
-            <div class="glass-box">
-                <p>القاعة: {{ $bookingData->hall->name }}</p>
-
-                @if ($bookingData->real_start_at)
-                    <p>بداية: {{ \Carbon\Carbon::parse($bookingData->real_start_at)->format('Y-m-d h:i A') }}</p>
+        @foreach ($purchaseItems as $item)
+        <div class="purchase-row">
+            <span style="font-weight: bold;">{{ $item->name }}</span>
+            
+            <span class="item-specs">
+                @if($item->color_name) {{ $item->color_name }} @endif
+                @if($item->size_name) | {{ $item->size_name }} @endif
+                @if($item->is_printed) 
+                    <small class="badge-print">مطبوع</small>
+                @else
+                    <small class="badge-plain">سادة</small>
                 @endif
+            </span>
 
-                @if ($bookingData->real_end_at)
-                    <p>نهاية: {{ \Carbon\Carbon::parse($bookingData->real_end_at)->format('Y-m-d h:i A') }}</p>
-                @endif
-
-                <p>سعر الساعة: {{ $hourlyRate }} ج</p>
-                <p>الإجمالي: {{ $groupedItems['booking']->first()->total ?? 0 }} ج</p>
-            </div>
+            <span>{{ $item->qty }}</span>
+            <span>{{ number_format($item->price, 2) }} ج</span>
+            <span>{{ number_format($item->total, 2) }} ج</span>
         </div>
-        @endif
-
-        <!-- Purchases -->
-        @if ($purchaseItems->isNotEmpty())
-        <div class="invoice-section">
-            <h3>🛒 المنتجات</h3>
-
-            <div class="purchase-table">
-                <div class="purchase-head">
-                    <span>المنتج</span>
-                    <span>الكمية</span>
-                    <span>السعر</span>
-                    <span>الإجمالي</span>
-                </div>
-
-                @foreach ($purchaseItems as $item)
-                <div class="purchase-row">
-                    <span>{{ $item->name }}</span>
-                    <span>{{ $item->qty }}</span>
-                    <span>{{ number_format($item->price, 2) }} ج</span>
-                    <span>{{ number_format($item->total, 2) }} ج</span>
-                </div>
-                @endforeach
-            </div>
-        </div>
-        @endif
+        @endforeach
+    </div>
+</div>
+@endif
 
         <!-- Total -->
         <div class="invoice-total">
@@ -181,35 +148,33 @@ body {
     box-shadow: inset 0 2px 6px rgba(0,0,0,.2);
 }
 
-/* Purchases */
-.purchase-table {
-    background: rgba(255,255,255,.08);
-    border-radius: 14px;
-    padding: 10px;
-    font-size: 13px;
-}
-
+/* تحديث تقسيم الجدول */
 .purchase-head,
 .purchase-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    /* تقسيم الأعمدة: منتج(كبير) - تفاصيل(متوسط) - كمية(صغير) - سعر(صغير) - إجمالي(صغير) */
+    grid-template-columns: 2fr 1.5fr 0.8fr 1fr 1fr; 
     text-align: center;
-    padding: 8px 0;
+    padding: 10px 0;
+    align-items: center;
 }
 
-.purchase-head {
-    font-weight: 800;
-    color: var(--prime);
-    border-bottom: 1px solid rgba(255,255,255,.2);
+/* ستايل التفاصيل (اللون والمقاس) */
+.item-specs {
+    font-size: 11px;
+    color: var(--prime-soft);
 }
 
-.purchase-row {
-    border-bottom: 1px dashed rgba(255,255,255,.15);
+.badge-print, .badge-plain {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    margin-right: 4px;
 }
 
-.purchase-row:last-child {
-    border-bottom: none;
-}
+.badge-print { background: #d9534f; color: #fff; } /* لون أحمر خفيف للطباعة */
+.badge-plain { background: rgba(255,255,255,0.1); color: var(--prime); }
 
 /* Total */
 .invoice-total {
@@ -241,10 +206,9 @@ body {
 
 /* Mobile */
 @media (max-width: 600px) {
-    .purchase-head,
-    .purchase-row {
-        grid-template-columns: 1.5fr .8fr .8fr .8fr;
-        font-size: 12px;
+    .purchase-head, .purchase-row {
+        grid-template-columns: 1.2fr 1fr 0.6fr 0.8fr 0.8fr;
+        font-size: 11px;
     }
 }
 </style>

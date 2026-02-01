@@ -2,29 +2,60 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Color;
 use App\Models\ImportantProduct;
 use App\Models\Product;
+use App\Models\Size;
+use App\Models\VariantStock;
 use DB;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+
+public function updateName(Request $request, Product $product)
+{
+    $request->validate([
+        'name' => 'required|string|max:255',
+    ]);
+
+    $product->update([
+        'name' => $request->name
+    ]);
+
+    return redirect()->back()->with('success', 'تم تحديث اسم المنتج بنجاح');
+}
   public function index()
   {
-    $products = Product::all();
+    $products = Product::with('variants')->get();
     $countProducts = $products->count();
-    $countItems = $products->sum('quantity');
 
-    return view('products.index', compact('products', 'countProducts', 'countItems'));
+    return view('products.index', compact('products', 'countProducts'));
   }
 
-
-
-  public function create()
+  public function show(Product $product)
   {
-    $products = Product::all();
-    return view('products.create', compact('products'));
+    $product->load([
+      'variants.color',
+      'variants.size',
+      'variants.stocks'
+    ]);
+
+    // grouping جاهز للـ UI
+    $colors = $product->variants->groupBy('color_id');
+
+    return view('products.show', [
+      'product'   => $product,
+      'colors'    => $colors,
+      'allColors' => Color::all(),
+      'allSizes'  => Size::all(),
+    ]);
   }
+
+
+
+
+
   public function createImportant()
   {
 
@@ -108,12 +139,6 @@ class ProductController extends Controller
     return response()->json(['status' => 'success', 'message' => 'Product updated successfully']);
   }
 
-  public function show(Product $product)
-  {
-    $importantProduct = ImportantProduct::where('product_id', $product->id)->first();
-
-    return view('products.show', compact('product', 'importantProduct'));
-  }
 
   public function addQuantityPage()
   {
@@ -123,18 +148,10 @@ class ProductController extends Controller
   {
     // 1️⃣ Validation كامل
     $request->validate([
-      'product_id'   => 'required|integer',
       'name'         => 'required|string|max:255',
-      'price'        => 'required|numeric|min:0',
-      'cost'         => 'required|numeric|min:0',
-      'quantity'     => 'required|integer|min:0',
-      'min_quantity' => 'required|integer|min:0',
     ]);
 
-    // 2️⃣ تحقق من تكرار ID
-    if (Product::where('id', $request->product_id)->exists()) {
-      return redirect()->back()->with('error', "هذا الـ ID موجود بالفعل في المخزن ❕");
-    }
+
 
     // 3️⃣ تحقق من تكرار الاسم
     if (Product::where('name', $request->name)->exists()) {
@@ -143,12 +160,7 @@ class ProductController extends Controller
 
     // 4️⃣ إدخال البيانات مع timestamps
     Product::create([
-      'id'           => $request->product_id,
       'name'         => $request->name,
-      'price'        => $request->price,
-      'cost'         => $request->cost,
-      'quantity'     => $request->quantity,
-      'min_quantity' => $request->min_quantity,
       'created_at'   => now(),
       'updated_at'   => now(),
     ]);
@@ -207,18 +219,47 @@ class ProductController extends Controller
   }
 
 
+  public function colors(Product $product)
+  {
+    return Color::whereHas('variants', function ($q) use ($product) {
+      $q->where('product_id', $product->id);
+    })->get();
+  }
 
+  public function sizes(Request $request)
+  {
+    return Size::whereHas('variants', function ($q) use ($request) {
+      $q->where([
+        'product_id' => $request->product_id,
+        'color_id'   => $request->color_id,
+      ]);
+    })->get();
+  }
+
+  public function stock(Request $request)
+  {
+    return VariantStock::whereHas('variant', function ($q) use ($request) {
+      $q->where([
+        'product_id' => $request->product_id,
+        'color_id'   => $request->color_id,
+        'size_id'    => $request->size_id,
+      ]);
+    })->get();
+  }
   public function search(Request $request)
   {
     $query = $request->get('query');
-
-    $results = Product::when($query, function ($q) use ($query) {
-      $q->where('name', 'LIKE', "%{$query}%")
-        ->orWhere('id', $query);
-    })
-      ->select('id', 'name', 'price', 'cost', 'quantity')
-      ->get();
-
-    return response()->json($results);
+    $products = Product::where('name', 'LIKE', "%{$query}%")
+      ->with(['variants.stocks']) // مهم للأداء
+      ->get()
+      ->map(function ($product) {
+        return [
+          'id' => $product->id,
+          'name' => $product->name,
+          'total_quantity' => $product->variants->flatMap->stocks->sum('quantity'),
+          'colors_count' => $product->variants->groupBy('color_id')->count(),
+        ];
+      });
+    return response()->json($products);
   }
 }

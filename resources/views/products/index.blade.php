@@ -70,30 +70,33 @@
         color: var(--prime);
     }
 
-/* زر الإضافة الجديد */
-#addButton {
-    top: 80px; /* المسافة من الأعلى */
-    right: 40px; /* المسافة من اليمين */
-    width: 120px;
-    height: 50px;
-    border-radius: 12px; /* مش دايرة كاملة */
-    border: none;
-    background: linear-gradient(135deg, var(--prime), var(--prime-soft));
-    color: var(--bg);
-    font-size: 28px;
-    font-weight: 800;
-    cursor: pointer;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, .35);
-    transition: .3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+    /* زر الإضافة الجديد */
+    #addButton {
+        top: 80px;
+        /* المسافة من الأعلى */
+        right: 40px;
+        /* المسافة من اليمين */
+        width: 120px;
+        height: 50px;
+        border-radius: 12px;
+        /* مش دايرة كاملة */
+        border: none;
+        background: linear-gradient(135deg, var(--prime), var(--prime-soft));
+        color: var(--bg);
+        font-size: 28px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, .35);
+        transition: .3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-#addButton:hover {
-    transform: scale(1.05) translateY(-2px);
-    box-shadow: 0 15px 35px rgba(0,0,0,0.45);
-}
+    #addButton:hover {
+        transform: scale(1.05) translateY(-2px);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.45);
+    }
 
 
 
@@ -183,15 +186,12 @@
         <div class="stats-row">
             <div class="stats-box">
                 <p>عدد المنتجات</p>
-                <p>{{ $countItems }}</p>
+                <p>{{ $countProducts }}</p>
             </div>
 
             <button id="addButton" data-bs-toggle="modal" data-bs-target="#chooseActionModal">+</button>
 
-            <div class="stats-box">
-                <p>عدد الأصناف</p>
-                <p>{{ $countProducts }}</p>
-            </div>
+
         </div>
 
         {{-- البحث --}}
@@ -199,112 +199,99 @@
             <input type="text" id="searchBox" placeholder="🔍 ابحث عن منتج">
         </div>
 
-        {{-- الكروت --}}
         <div class="products-grid" id="productsGrid">
+
             @foreach ($products as $product)
-                <div class="product-card">
+                <div class="product-card" onclick="window.location='{{ route('products.show', $product->id) }}'">
 
                     <div class="product-title">{{ $product->name }}</div>
 
-                    <div class="product-info">💰 السعر: {{ $product->price }}</div>
-                    <div class="product-info">📦 التكلفة: {{ $product->cost }}</div>
-                    <div class="product-info">🔢 الكمية: {{ $product->quantity }}</div>
+                    <div class="product-info">
+                        📦 إجمالي القطع:
+                        {{ $product->variants->flatMap->stocks->sum('quantity') }}
+                    </div>
 
-                    <span class="product-badge">ID #{{ $product->id }}</span>
+                    <div class="product-info">
+                        🎨 عدد الألوان:
+                        {{ $product->variants->groupBy('color_id')->count() }}
+                    </div>
+
                 </div>
             @endforeach
+
         </div>
     </div>
 
-    
-
-    {{-- البحث AJAX --}}
     <script>
-        document.getElementById('searchBox').addEventListener('keyup', function() {
-            let query = this.value;
+        document.addEventListener('DOMContentLoaded', function() {
 
-            fetch("{{ route('products.search') }}?query=" + query)
-                .then(res => res.json())
-                .then(data => {
-                    let grid = document.getElementById('productsGrid');
-                    grid.innerHTML = "";
+            const searchInput = document.getElementById('searchBox');
+            const productsGrid = document.getElementById('productsGrid');
 
-                    if (!data.length) {
-                        grid.innerHTML =
-                            `<p style="grid-column:1/-1;text-align:center;color:var(--prime-soft)">لا توجد نتائج</p>`;
-                        return;
-                    }
+            function loadProducts(query = '') {
+                // لو query فيها : أو فاضي
+                query = query.trim();
 
-                    data.forEach(item => {
-                        grid.innerHTML += `
-                    <div class="product-card" data-href="/products/${item.id}">
-                        <div class="product-title">${item.name}</div>
-                        <div class="product-info">💰 السعر: ${item.price}</div>
-                        <div class="product-info">📦 التكلفة: ${item.cost}</div>
-                        <div class="product-info">🔢 الكمية: ${item.quantity}</div>
-                        <span class="product-badge">ID #${item.id}</span>
-                    </div>
-                `;
-                    });
+                fetch(`/products/search?query=${encodeURIComponent(query)}`)
+                    .then(res => {
+                        if (!res.ok) throw new Error('Server error');
+                        return res.json();
+                    })
+                    .then(products => {
 
-                    document.querySelectorAll('.product-card').forEach(card => {
-                        card.addEventListener('click', function() {
-                            window.location.href = this.dataset.href;
+                        productsGrid.innerHTML = '';
+
+                        if (!products.length) {
+                            productsGrid.innerHTML = `
+                        <div style="grid-column:1/-1;text-align:center;color:#ddcdbc">
+                            لا توجد منتجات
+                        </div>
+                    `;
+                            return;
+                        }
+
+                        products.forEach(product => {
+                            const card = document.createElement('div');
+                            card.className = 'product-card';
+                            card.onclick = () => {
+                                window.location = `/products/${product.id}`;
+                            };
+
+                            card.innerHTML = `
+                        <div class="product-title">${product.name}</div>
+
+                        <div class="product-info">
+                            📦 إجمالي القطع: ${product.total_quantity}
+                        </div>
+
+                        <div class="product-info">
+                            🎨 عدد الألوان: ${product.colors_count}
+                        </div>
+                    `;
+
+                            productsGrid.appendChild(card);
                         });
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        productsGrid.innerHTML = 'حدث خطأ';
                     });
-                });
+            }
+
+
+
+            // 🔥 تحميل المنتجات أول ما الصفحة تفتح
+            loadProducts();
+
+            // 🔍 البحث Live
+            searchInput.addEventListener('keyup', function() {
+                loadProducts(this.value.trim());
+            });
+
         });
     </script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const searchInput = document.getElementById('searchProduct');
-    const resultsList = document.getElementById('searchResults');
-    const form = document.getElementById('addQuantityForm');
-    const productIdInput = document.getElementById('product_id');
 
-    searchInput.addEventListener('keyup', function () {
-        const query = this.value.trim();
 
-        if (!query) {
-            resultsList.innerHTML = '';
-            form.style.display = 'none';
-            return;
-        }
-
-        fetch(`{{ route('products.search') }}?query=${encodeURIComponent(query)}`)
-            .then(res => res.json())
-            .then(data => {
-                resultsList.innerHTML = '';
-
-                if (!data.length) {
-                    resultsList.innerHTML = `<li class="list-group-item text-center text-muted">لا توجد نتائج</li>`;
-                    form.style.display = 'none';
-                    return;
-                }
-
-                data.forEach(product => {
-                    const li = document.createElement('li');
-                    li.className = 'list-group-item list-group-item-action';
-                    li.textContent = `${product.name} | الكمية: ${product.quantity}`;
-                    li.style.cursor = 'pointer';
-                    li.addEventListener('click', () => {
-                        productIdInput.value = product.id;
-                        searchInput.value = product.name;
-                        resultsList.innerHTML = '';
-                        form.style.display = 'block';
-                    });
-                    resultsList.appendChild(li);
-                });
-            })
-            .catch(err => {
-                console.error(err);
-                resultsList.innerHTML = `<li class="list-group-item text-center text-danger">حدث خطأ</li>`;
-            });
-    });
-});
-</script>
-
-    {{-- المودالات --}}
     @include('products.modals.choose-action')
     @include('products.modals.add-product')
     @include('products.modals.add-quantity')

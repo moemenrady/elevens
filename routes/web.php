@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\ApiSystemActionController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\SystemActionController;
@@ -14,7 +15,14 @@ use Illuminate\Http\Request;
 
 Route::middleware('auth')->group(function () {
 
-  Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+
+  Route::get('/products/{product}/colors', [ProductController::class, 'colors']);
+  Route::get('/variants/sizes', [ProductController::class, 'sizes']);
+  Route::get('/variants/stock', [ProductController::class, 'stock']);
+
+  Route::post('/invoice/create', [InvoiceController::class, 'storeVariantStock'])
+    ->name('invoice.create');
+
   Route::get('/products/search-id', [ProductController::class, 'searchId'])->name('products.searchid');
 
 
@@ -34,27 +42,26 @@ Route::middleware('auth')->group(function () {
     return view('dashboard');
   })->middleware(['auth', 'verified',])->name('dashboard')->middleware("admin");
 
+  Route::get('/error', function (Request $request) {
+    $error = $request->get('message', 'حدث خطأ غير متوقع');
+    return view('error.create', compact('error'));
+  })->name('error.create');
 
+  Route::get('/error-system-data', function (Request $request) {
+    $error = session('message', 'حدث خطأ غير متوقع'); // يجلب الرسالة من الـ session
+    return view('error.admin', compact('error'));
+  })->name('admin-error.create');
 });
-
-Route::get('/error', function (Request $request) {
-  $error = $request->get('message', 'حدث خطأ غير متوقع');
-  return view('error.create', compact('error'));
-})->name('error.create');
-
-Route::get('/error-system-data', function (Request $request) {
-  $error = session('message', 'حدث خطأ غير متوقع'); // يجلب الرسالة من الـ session
-  return view('error.admin', compact('error'));
-})->name('admin-error.create');
 
 require __DIR__ . '/auth.php';
 require __DIR__ . '/products.php';
 require __DIR__ . '/managment.php';
-require __DIR__ . '/clients.php';
-require __DIR__ . '/expenses.php';
-require __DIR__ . '/sales.php';
 require __DIR__ . '/main.php';
-require __DIR__ . '/analytics.php';
-require __DIR__ . '/daily.php';
 require __DIR__ . '/invoices.php';
-
+require __DIR__ . '/invoices.php';
+require __DIR__ . '/variant_stock.php';
+require __DIR__ . '/product_variant.php';
+// require __DIR__ . '/clients.php';
+// require __DIR__ . '/expenses.php';
+// require __DIR__ . '/analytics.php';
+// require __DIR__ . '/daily.php'; 

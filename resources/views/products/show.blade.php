@@ -4,194 +4,282 @@
 
 @section('content')
     <div class="product-container">
-        <div class="card fade-in">
-            <div class="card-header">
-                <h2>🛒 تفاصيل المنتج</h2>
-                <span class="badge">#{{ $product->id }}</span>
-
-                <div class="header-left">
-                    <a href="#" id="openEditModal" class="btn edit-btn" title="تعديل المنتج" data-bs-toggle="modal"
-                        data-bs-target="#editProductModal">
-                        ✏️ تعديل
+        <div class="main-product-card fade-in">
+            {{-- الرأس: اسم المنتج والتحكم --}}
+            <div class="product-header-section">
+                <div class="info">
+                    <span class="category-label">📦 منتج</span>
+                    <h1 class="product-title">{{ $product->name }}</h1>
+                    <div class="product-meta">
+                        <span class="meta-item">ID: {{ $product->id }}</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-modern edit" onclick="openEditProductNameModal()">
+                    <span>✏️</span> تعديل الاسم
+                </button>
+            </div>
+            {{-- قسم الألوان والمقاسات --}}
+            <div class="variants-section">
+                <div class="section-title-wrapper">
+                    <h3>🎨 الألوان والمخزون</h3>
+                    <a href="{{ route('variants.create', $product->id) }}" class="btn-modern success">
+                        <span>➕</span> إضافة تنوع جديد
                     </a>
-
                 </div>
-            </div>
 
-            {{-- بيانات أساسية --}}
-            <div class="section product-main">
-                <div class="box">
-                    <div class="row">
-                        <div class="col">
-                            <label class="lbl">📦 الاسم</label>
-                            <p class="value">{{ $product->name }}</p>
+                @foreach ($colors as $colorId => $variants)
+                    <div class="color-group">
+                        {{-- بطاقة اللون --}}
+                        <div class="color-header" onclick="toggleSizes({{ $colorId }})">
+                            <div class="color-info">
+                                <span class="color-dot"
+                                    style="background-color: {{ strtolower($variants->first()->color->name) == 'white' ? '#fff' : (strtolower($variants->first()->color->name) == 'black' ? '#000' : '#515831') }}; border: 1px solid #ddd;"></span>
+                                <span class="color-name">{{ $variants->first()->color->name }}</span>
+                            </div>
+                            <div class="color-summary">
+                                <span class="total-qty">📦 {{ $variants->sum(fn($v) => $v->stocks->sum('quantity')) }}
+                                    قطعة</span>
+                                <span class="toggle-icon">▼</span>
+                            </div>
                         </div>
-                        <div class="col">
-                            <label class="lbl">💰 سعر البيع</label>
-                            <p class="value">{{ number_format($product->price, 2) }} جنيه</p>
+
+                        {{-- تفاصيل المقاسات داخل اللون --}}
+                        <div class="sizes-container d-none" id="sizes-{{ $colorId }}">
+                            <table class="sizes-table">
+                                <thead>
+                                    <tr>
+                                        <th>المقاس</th>
+                                        <th>إجمالي</th>
+                                        <th>🖨️ مخزون مطبوع</th>
+                                        <th>👕 مخزون سادة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($variants->groupBy('size_id') as $sizeVariants)
+                                        @php $variant = $sizeVariants->first(); @endphp
+                                        <tr>
+                                            <td class="size-name-cell"><strong>{{ $variant->size->name }}</strong></td>
+                                            <td><span class="qty-badge total">{{ $variant->stocks->sum('quantity') }}</span>
+                                            </td>
+                                            <td>
+                                                <div class="stock-action-wrapper">
+                                                    <span
+                                                        class="qty-num printed-text">{{ $variant->printedStock->quantity ?? 0 }}</span>
+                                                    <button class="btn-add-stock printed"
+                                                        onclick="openAddStock({{ $variant->id }}, 1)">
+                                                        <span>➕</span> مطبوع
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="stock-action-wrapper">
+                                                    <span
+                                                        class="qty-num plain-text">{{ $variant->plainStock->quantity ?? 0 }}</span>
+                                                    <button class="btn-add-stock plain"
+                                                        onclick="openAddStock({{ $variant->id }}, 0)">
+                                                        <span>➕</span> سادة
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+                @endforeach
 
-                    <div class="row">
-                        <div class="col">
-                            <label class="lbl">🧾 التكلفة</label>
-                            <p class="value">{{ number_format($product->cost, 2) }} جنيه</p>
-                        </div>
-                        <div class="col">
-                            <label class="lbl">📦 الكمية بالمخزون</label>
-                            <p class="value">{{ $product->quantity }}</p>
-                        </div>
-                    </div>
-                </div>
+
+
             </div>
 
-         
+
 
             <div class="section">
                 <div class="box">
                     <ul class="mini-list">
-                        <li><strong>تاريخ الإضافة:</strong> {{ $product->created_at->format('Y-m-d H:i') }}</li>
-                        <li><strong>آخر تعديل:</strong> {{ $product->updated_at->format('Y-m-d H:i') }}</li>
+                        <li><strong>تاريخ إضافة المنتج :</strong> {{ $product->created_at->format('Y-m-d H:i') }}</li>
+                        <li>
+                            <strong>آخر إضافة للمخزون:</strong>
+                            @php
+                                // جلب آخر سجل مخزون مضاف لهذا المنتج عبر التنوعات
+                                $lastStock = $product->variants->flatMap->stocks->sortByDesc('created_at')->first();
+                            @endphp
+
+                            @if ($lastStock)
+                                {{ $lastStock->created_at->format('Y-m-d H:i') }}
+                                <span style="font-size: 11px; color: #777;">
+                                    ({{ $lastStock->is_printed ? 'مطبوع' : 'سادة' }})
+                                </span>
+                            @else
+                                <span class="muted">لا يوجد مخزون مضاف بعد</span>
+                            @endif
+                        </li>
                     </ul>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- 🟣 مودال تعديل المنتج المهم --}}
-    <div id="editModal" class="modal fade" tabindex="-1" role="dialog">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content" style="border-radius: 16px;">
-                <div class="modal-header">
-                    <h5 class="modal-title">✏️ تعديل المنتج المهم</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="editForm" method="POST" action="">
-                        @csrf
-                        @method('PUT')
 
-                        <div class="form-group mb-3">
-                            <label>اسم التعريف</label>
-                            <input type="text" name="name" id="editName" class="form-control" required>
+
+
+    <!-- Add Quantity Modal -->
+    <div class="modal fade" id="addQtyModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">إضافة كمية</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <form method="POST" id="addQtyForm">
+                    @csrf
+
+                    <div class="modal-body">
+                        <label class="form-label">الكمية</label>
+                        <input type="number" name="quantity" class="form-control" min="1" required>
+                    </div>
+                    <input type="hidden" name="is_printed" id="isPrinted">
+
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">
+                            حفظ
+                        </button>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+    </div>
+    <!-- Add Color Modal -->
+    <div class="modal fade" id="addColorModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">➕ إضافة لون جديد</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <form method="POST" action="{{ route('variants.storeColor', $product->id) }}">
+                    @csrf
+
+                    <div class="modal-body">
+
+                        {{-- اللون --}}
+                        <div class="mb-3">
+                            <label class="form-label">🎨 اللون</label>
+                            <select name="color_id" class="form-control" required>
+                                @foreach ($allColors as $color)
+                                    <option value="{{ $color->id }}">{{ $color->name }}</option>
+                                @endforeach
+                            </select>
                         </div>
 
-                        <div class="form-group position-relative mb-3">
-                            <label>اختر منتج جديد (اختياري)</label>
-                            <input type="text" id="editProductSearch" placeholder="🔍 اكتب اسم المنتج..."
-                                class="form-control">
-                            <input type="hidden" name="product_id" id="editProductId">
+                        {{-- المقاسات --}}
+                        <label class="form-label">📐 المقاسات</label>
 
-                            <div id="editProductResults" class="list-group position-absolute d-none"></div>
+                        @foreach ($allSizes as $size)
+                            <div class="d-flex align-items-center mb-2 gap-2">
+                                <input type="checkbox" name="sizes[{{ $size->id }}][enabled]">
+                                <span>{{ $size->name }}</span>
 
-                            <div id="editSelectedProduct" class="selected mt-2" style="display:none;">
-                                محدد الآن: <strong id="editSelectedProductText"></strong>
-                                <button type="button" id="editClearSelected" class="btn-small">إلغاء</button>
+                                <input type="number" name="sizes[{{ $size->id }}][quantity]" placeholder="الكمية"
+                                    min="0" class="form-control" style="width:120px">
                             </div>
-                        </div>
+                        @endforeach
 
-                        <button type="submit" class="btn btn-primary w-100">💾 حفظ التعديلات</button>
-                    </form>
-                </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">
+                            حفظ اللون
+                        </button>
+                    </div>
+                </form>
+
             </div>
         </div>
     </div>
-    {{-- 🟢 مودال تعديل المنتج --}}
-    <div id="editProductModal" class="modal fade" tabindex="-1" role="dialog">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content" style="border-radius: 16px;">
-                <div class="modal-header">
-                    <h5 class="modal-title">✏️ تعديل بيانات المنتج</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
+<div class="modal fade" id="editProductNameModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✏️ تعديل اسم المنتج</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ route('products.updateName', $product->id) }}" method="POST">
+                @csrf
+                @method('PATCH')
                 <div class="modal-body">
-                    <form id="updateProductForm">
-                        @csrf
-                        @method('PUT')
-
-                        <div class="form-group mb-3">
-                            <label>📦 اسم المنتج</label>
-                            <input type="text" name="name" id="edit_name" class="form-control" required>
-                        </div>
-
-                        <div class="form-group mb-3">
-                            <label>💰 سعر البيع</label>
-                            <input type="number" name="price" id="edit_price" step="0.01" class="form-control"
-                                required>
-                        </div>
-
-                        <div class="form-group mb-3">
-                            <label>🧾 التكلفة</label>
-                            <input type="number" name="cost" id="edit_cost" step="0.01" class="form-control"
-                                required>
-                        </div>
-
-                        <div class="form-group mb-3">
-                            <label>📦 الكمية بالمخزون</label>
-                            <input type="number" name="quantity" id="edit_quantity" class="form-control" required>
-                        </div>
-
-                        <div id="editProductAlert" class="alert d-none mt-3"></div>
-
-                        <button type="submit" class="btn btn-primary w-100 mt-2">💾 حفظ التعديلات</button>
-                    </form>
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنتج الجديد</label>
+                        <input type="text" name="name" class="form-control" value="{{ $product->name }}" required>
+                    </div>
                 </div>
-            </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">تحديث الاسم</button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
+
+<script>
+    function openEditProductNameModal() {
+        new bootstrap.Modal(document.getElementById('editProductNameModal')).show();
+    }
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        $(document).ready(function() {
-            // فتح المودال وملء البيانات الحالية
-            $('#openEditModal').on('click', function(e) {
-                e.preventDefault();
-                $('#edit_name').val(`{{ $product->name }}`);
-                $('#edit_price').val(`{{ $product->price }}`);
-                $('#edit_cost').val(`{{ $product->cost }}`);
-                $('#edit_quantity').val(`{{ $product->quantity }}`);
-                $('#editProductModal').modal('show');
+        // وظيفة عامة لفتح أي مودال بسلاسة بدون تظليل
+        function openModal(modalId) {
+            const modalEl = document.getElementById(modalId);
+
+            // إزالة أي fade قديم
+            modalEl.querySelector('.modal-dialog').classList.remove('animate__fadeInUp');
+
+            // إضافة Fade animation
+            modalEl.querySelector('.modal-dialog').classList.add('animate__animated', 'animate__fadeInUp');
+
+            // تفعيل المودال بدون backdrop مظلل
+            const modal = new bootstrap.Modal(modalEl, {
+                backdrop: false,
+                keyboard: true
             });
 
-            // عند الحفظ
-            $('#updateProductForm').on('submit', function(e) {
-                e.preventDefault();
+            modal.show();
+        }
 
-                let formData = $(this).serialize();
-                let url = "{{ route('products.update', $product->id) }}";
-                let alertBox = $('#editProductAlert');
+        // فتح مودال تعديل المنتج
+        $('#openEditModal').on('click', function(e) {
+            e.preventDefault();
+            $('#edit_name').val(`{{ $product->name }}`);
+            $('#edit_price').val(`{{ $product->price }}`);
+            $('#edit_cost').val(`{{ $product->cost }}`);
+            $('#edit_quantity').val(`{{ $product->quantity }}`);
 
-                $.ajax({
-                    url: url,
-                    type: 'POST',
-                    data: formData,
-                    success: function(response) {
-                        alertBox
-                            .removeClass('d-none alert-danger')
-                            .addClass('alert-success')
-                            .text('✅ تم تحديث بيانات المنتج بنجاح!');
-
-                        setTimeout(() => {
-                            $('#editProductModal').modal('hide');
-                            location.reload(); // لتحديث الصفحة بعد الحفظ
-                        }, 1200);
-                    },
-                    error: function(xhr) {
-                        let msg = 'حدث خطأ أثناء الحفظ.';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            msg = xhr.responseJSON.message;
-                        }
-                        alertBox
-                            .removeClass('d-none alert-success')
-                            .addClass('alert-danger')
-                            .text('❌ ' + msg);
-                    }
-                });
-            });
+            openModal('editProductModal');
         });
-    </script>
 
-    <script>
+        // فتح مودال إضافة كمية
+        function openAddQty(variantId) {
+            const form = document.getElementById('addQtyForm');
+            form.action = `/variants/${variantId}/add-quantity`;
+            openModal('addQtyModal');
+        }
+
+        // فتح مودال إضافة لون
+        function openAddColorModal() {
+            openModal('addColorModal');
+        }
+
+        // فتح مودال تعديل المنتج المهم
         $(document).on('click', '.edit-important-btn', function() {
             const id = $(this).data('id');
             const name = $(this).data('name');
@@ -204,58 +292,434 @@
             $('#editProductId').val(productId);
 
             $('#editForm').attr('action', `/important-products/${id}`);
-            $('#editModal').modal('show');
-        });
-
-        $('#editProductSearch').on('keyup', function() {
-            let query = $(this).val().trim();
-            if (query.length < 1) {
-                $('#editProductResults').addClass('d-none');
-                return;
-            }
-            $.ajax({
-                url: "{{ route('products.search') }}",
-                type: "GET",
-                data: {
-                    q: query
-                },
-                success: function(data) {
-                    let html = '';
-                    if (data.length > 0) {
-                        data.forEach(item => {
-                            html += `<a href="#" class="list-group-item list-group-item-action edit-result-item"
-                        data-id="${item.id}" data-name="${item.name}">
-                        #${item.id} - ${item.name}
-                    </a>`;
-                        });
-                    } else {
-                        html = '<div class="list-group-item text-muted">لا توجد نتائج</div>';
-                    }
-                    $('#editProductResults').html(html).removeClass('d-none');
-                }
-            });
-        });
-
-        $(document).on('click', '.edit-result-item', function(e) {
-            e.preventDefault();
-            const id = $(this).data('id');
-            const name = $(this).data('name');
-            $('#editProductId').val(id);
-            $('#editSelectedProductText').text(name);
-            $('#editSelectedProduct').show();
-            $('#editProductResults').addClass('d-none');
-        });
-
-        $('#editClearSelected').on('click', function() {
-            $('#editProductId').val('');
-            $('#editSelectedProductText').text('');
-            $('#editSelectedProduct').hide();
-            $('#editProductSearch').val('');
+            openModal('editModal');
         });
     </script>
+
+
+    <script>
+        function toggleSizes(colorId) {
+            const box = document.getElementById(`sizes-${colorId}`);
+            const icon = box.previousElementSibling.querySelector('.toggle-icon');
+
+            if (box.classList.contains('d-none')) {
+                box.classList.remove('d-none');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                box.classList.add('d-none');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+    </script>
+    <script>
+        function openAddQty(variantId) {
+            const form = document.getElementById('addQtyForm');
+
+            form.action = `/variants/${variantId}/add-quantity`;
+
+            const modal = new bootstrap.Modal(
+                document.getElementById('addQtyModal')
+            );
+
+            modal.show();
+        }
+
+        function openAddStock(variantId, isPrinted) {
+            const form = document.getElementById('addQtyForm');
+            form.action = `/variants/${variantId}/add-stock`;
+
+            document.getElementById('isPrinted').value = isPrinted;
+
+            new bootstrap.Modal(
+                document.getElementById('addQtyModal')
+            ).show();
+        }
+    </script>
+    <script>
+        function openAddColorModal() {
+            const modal = new bootstrap.Modal(
+                document.getElementById('addColorModal')
+            );
+            modal.show();
+        }
+    </script>
+
+
 @endsection
 
 @section('style')
+    <style>
+        <style> :root {
+            --primary-color: #515831;
+            --secondary-color: #79c879;
+            --text-dark: #2d3436;
+            --bg-light: #f8f9fa;
+            --border-radius: 16px;
+        }
+
+        .main-product-card {
+            background: #fff;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            border: 1px solid #eee;
+        }
+
+        /* Header Section */
+        .product-header-section {
+            background: linear-gradient(135deg, #515831 0%, #3a4124 100%);
+            padding: 30px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.8;
+        }
+
+        .product-title {
+            font-size: 28px;
+            margin: 5px 0;
+            font-weight: 800;
+        }
+
+        .product-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        /* Variants Section */
+        .variants-section {
+            padding: 25px;
+        }
+
+        .section-title-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        /* Color Groups */
+        .color-group {
+            border: 1px solid #eee;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .color-header {
+            background: #fdfdfd;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .color-header:hover {
+            background: #f1f3f0;
+        }
+
+        .color-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .color-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+        }
+
+        .color-name {
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--text-dark);
+        }
+
+        .total-qty {
+            background: #e9ecef;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* Sizes Table */
+        .sizes-container {
+            padding: 0 20px 20px;
+            background: #fff;
+        }
+
+        .sizes-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        .sizes-table th {
+            color: #888;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px;
+            text-align: right;
+        }
+
+        .sizes-table td {
+            background: #fcfcfc;
+            padding: 12px;
+            border-top: 1px solid #f1f1f1;
+            border-bottom: 1px solid #f1f1f1;
+        }
+
+        .sizes-table td:first-child {
+            border-right: 1px solid #f1f1f1;
+            border-radius: 0 10px 10px 0;
+        }
+
+        .sizes-table td:last-child {
+            border-left: 1px solid #f1f1f1;
+            border-radius: 10px 0 0 10px;
+        }
+
+        /* Stock Control Logic */
+        .stock-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .qty-count {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 16px;
+            min-width: 30px;
+        }
+
+        .qty-badge.total {
+            background: #51583120;
+            color: #515831;
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+
+        .plus-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            border: none;
+            background: var(--secondary-color);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .plus-btn.plain {
+            background: #6c757d;
+        }
+
+        .plus-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Buttons */
+        .btn-modern {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-modern.edit {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-modern.edit:hover {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        .btn-modern.success {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .d-none {
+            display: none;
+        }
+    </style>
+
+    <style>
+        :root {
+            --primary: #515831;
+            --printed-color: #28a745;
+            /* أخضر للمطبوع */
+            --plain-color: #495057;
+            /* رمادي داكن للسادة */
+            --bg-light: #f8f9fa;
+        }
+
+        .product-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        .main-product-card {
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        /* Header */
+        .product-header-section {
+            background: var(--primary);
+            padding: 25px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .product-title {
+            font-size: 24px;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        /* Table Styling */
+        .variants-section {
+            padding: 20px;
+        }
+
+        .sizes-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .sizes-table th {
+            padding: 12px;
+            color: #777;
+            font-size: 14px;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+        }
+
+        .sizes-table td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid #f1f1f1;
+        }
+
+        /* Stock Actions */
+        .stock-action-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .qty-num {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .printed-text {
+            color: var(--printed-color);
+        }
+
+        .plain-text {
+            color: var(--plain-color);
+        }
+
+        /* الأزرار الجديدة */
+        .btn-add-stock {
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: white;
+            min-width: 110px;
+            justify-content: center;
+        }
+
+        /* زر المطبوع (أخضر) */
+        .btn-add-stock.printed {
+            background-color: var(--printed-color);
+            box-shadow: 0 3px 8px rgba(40, 167, 69, 0.2);
+        }
+
+        .btn-add-stock.printed:hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+        }
+
+        /* زر السادة/غير المطبوع (رمادي احترافي) */
+        .btn-add-stock.plain {
+            background-color: var(--plain-color);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-add-stock.plain:hover {
+            background-color: #343a40;
+            transform: translateY(-2px);
+        }
+
+        .qty-badge.total {
+            background: #eee;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        /* Utility */
+        .d-none {
+            display: none;
+        }
+
+        .color-group {
+            border: 1px solid #eee;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .color-header {
+            background: #fdfdfd;
+            padding: 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
     <style>
         body {
             background: #fafafa;
@@ -296,7 +760,7 @@
         }
 
         .badge {
-            background: #D9B1AB;
+            background: #515831;
             color: #fff;
             padding: 6px 12px;
             border-radius: 30px;
@@ -304,8 +768,18 @@
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
         }
 
+        .modal-dialog {
+            border-radius: 16px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .modal-backdrop {
+            display: none;
+            /* إزالة التظليل */
+        }
+
         .section h3 {
-            color: #a86f68;
+            color: #515831;
             font-size: 20px;
             margin-bottom: 10px;
         }
@@ -374,7 +848,7 @@
         }
 
         .btn.small {
-            background: #D9B1AB;
+            background: #515831;
             color: #fff;
             padding: 8px 12px;
             border-radius: 10px;
@@ -386,7 +860,7 @@
 
         .btn.small:hover {
             transform: translateY(-3px);
-            background: #a86f68;
+            background: #515831;
         }
 
         .btn.small.success {

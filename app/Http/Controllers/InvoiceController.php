@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Shift;
 use App\Models\ShiftAction;
 use App\Services\ShiftService;
@@ -18,7 +19,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\SystemAction;
+use App\Models\VariantStock;
 use Schema;
+
 class InvoiceController extends Controller
 {
 
@@ -43,17 +46,16 @@ class InvoiceController extends Controller
     $profit = $total - $cost;
 
     return view('invoices.show', compact('invoice', 'total', 'cost', 'profit'));
-
   }
   // public function admin_show(Invoice $invoice)
-//   {
-//   $invoice->load(['items', 'user']); // تأكد أن relations موجودة
+  //   {
+  //   $invoice->load(['items', 'user']); // تأكد أن relations موجودة
 
   //     // حسابات ملخص
-//     $total = $invoice->items->sum('total');
-//     $cost = $invoice->items->sum('cost') * 1; // مجموع تكلفة الوحدات (cost * qty إذا مخزن غير مضروب)
-//     // إذا لديك cost مخزن لكل item كمجموع، عدّل حسب الحاجة
-//     $profit = $total - $cost;
+  //     $total = $invoice->items->sum('total');
+  //     $cost = $invoice->items->sum('cost') * 1; // مجموع تكلفة الوحدات (cost * qty إذا مخزن غير مضروب)
+  //     // إذا لديك cost مخزن لكل item كمجموع، عدّل حسب الحاجة
+  //     $profit = $total - $cost;
 
   //     return view('invoices.admin-show', compact('invoice', 'total', 'cost', 'profit'));
 
@@ -61,112 +63,23 @@ class InvoiceController extends Controller
 
 
   public function client_show(Invoice $invoice)
-  {
-    // تحميل العلاقات المطلوبة
-    $invoice->load([
-      'client',
-      'items',
+{
+    // تحميل العلاقات الأساسية فقط (العميل وبنود الفاتورة)
+    $invoice->load(['client', 'items']);
 
-    ]);
+    // بما أن النظام أصبح منتجات فقط، كل البنود هي purchaseItems
+    $purchaseItems = $invoice->items;
 
-    // ترتيب البنود حسب النوع
-    $groupedItems = [
-      'product' => $invoice->items->where('item_type', 'product'),
-      'subscription' => $invoice->items->where('item_type', 'subscription'),
-      'booking' => $invoice->items->where('item_type', 'booking'),
-      'session' => $invoice->items->where('item_type', 'session'),
-      'deposit' => $invoice->items->where('item_type', 'deposit'),
-    ];
-
-    // ✅ أي فاتورة فيها منتجات تظهر مشترياتها (تمت استعادتها)
-    $purchaseItems = collect();
-    if ($groupedItems['product']->isNotEmpty()) {
-      $purchaseItems = $groupedItems['product'];
-    }
-
-    // حساب الإجمالي الكلي
+    // إجمالي الفاتورة (مخزن مسبقاً في جدول الفواتير)
     $totalAmount = $invoice->total;
 
-    // نوع الفاتورة
-    $invoiceType = $invoice->type;
-
-    // بيانات إضافية لو نوعها deposit
-    $extraData = [];
-    if ($invoiceType === 'deposit') {
-      $extraData = [
-        'client_name' => $invoice->client->name ?? 'غير معروف',
-        'booking_date' => optional($invoice->booking)->date ?? '-',
-      ];
-    }
-
-    // التحقق من وجود مشتريات داخل فاتورة جلسة أو حجز
-    $isHasPurchase = false;
-    if (
-      in_array($invoiceType, ['booking', 'session']) &&
-      $invoice->items->where('item_type', 'product')->isNotEmpty()
-    ) {
-      $isHasPurchase = true;
-    }
-
-    // بيانات الحجز لو نوع الفاتورة booking
-    $bookingData = null;
-    $hourlyRate = null;
-    $actualDurationMinutes = null;
-    if ($invoiceType === 'booking' && $invoice->booking) {
-
-      $bookingData = $invoice->booking;
-
-      // التأكد إن القيم موجودة قبل الحساب
-      if (!empty($bookingData->duration_minutes) && !empty($bookingData->estimated_total)) {
-        $hours = $bookingData->duration_minutes / 60;
-        if ($hours > 0) {
-          $hourlyRate = $bookingData->estimated_total / $hours;
-        }
-      }
-      // حساب المدة الفعلية بالدقائق من real_start_at و real_end_at
-      if (!empty($bookingData->real_start_at) && !empty($bookingData->real_end_at)) {
-        $start = Carbon::parse($bookingData->real_start_at);
-        $end = Carbon::parse($bookingData->real_end_at);
-
-        $secondsDiff = abs($end->diffInSeconds($start, false));
-        $actualDurationMinutes = (int) round($secondsDiff / 60);
-      }
-    }
-
-    // بيانات الجلسة المأخوذة من invoice_item -> session
-    $sessionData = null;
-    if ($invoiceType === 'session') {
-      // نجيب أول item من نوع session
-      $sessionItem = $invoice->items->firstWhere('item_type', 'session');
-      if ($sessionItem && $sessionItem->session) {
-        $sessionData = $sessionItem->session;
-
-        // نحسب مدة الجلسة الفعلية لو فيها start/end
-        if (!empty($sessionData->start_time) && !empty($sessionData->end_time)) {
-          $start = Carbon::parse($sessionData->start_time);
-          $end = Carbon::parse($sessionData->end_time);
-          $sessionData->actual_duration_minutes = $end->diffInMinutes($start);
-        }
-      }
-    }
-
-    // تمرير كل البيانات إلى الواجهة
+    // تمرير البيانات الصافية التي تحتاجها صفحة الـ Blade
     return view('invoices.client_show', [
-      'invoice' => $invoice,
-      'groupedItems' => $groupedItems,
-      'totalAmount' => $totalAmount,
-      'invoiceType' => $invoiceType,
-      'extraData' => $extraData,
-      'isHasPurchase' => $isHasPurchase,
-      'bookingData' => $bookingData,
-      'hourlyRate' => $hourlyRate,
-      'actualDurationMinutes' => $actualDurationMinutes,
-      'sessionData' => $sessionData,
-      'purchaseItems' => $purchaseItems, // ← تمت إعادتها للتمرير إلى الواجهة
+        'invoice'       => $invoice,
+        'purchaseItems' => $purchaseItems,
+        'totalAmount'   => $totalAmount,
     ]);
-  }
-
-
+}
 
   public function ajaxSearch(Request $request)
   {
@@ -206,156 +119,202 @@ class InvoiceController extends Controller
 
 
   // لو عايز المعاينة بدون حفظ (يعتمد على نفس فورم الداتا)
-  public function preview(StoreInvoiceRequest $request)
+  public function preview(Request $request)
   {
+    $rawItems = json_decode($request->input('items'), true);
+    if (!$rawItems) return redirect()->back()->with('error', 'السلة فارغة');
 
+    $processedItems = [];
+    $grandTotal = 0;
 
-    [$items, $totals] = $this->buildItemsFromRequest($request->validated()['items']);
+    foreach ($rawItems as $item) {
+      $variant = \App\Models\ProductVariant::where('product_id', $item['product_id'])
+        ->where('color_id', $item['color_id'])
+        ->where('size_id', $item['size_id'])
+        ->first();
 
-    // نحدد نوع الفاتورة تلقائيًا
-    $type = $this->determineInvoiceType($items);
+      $price = $variant->price ?? 0;
+      $qty = (int) $item['quantity'];
+      $total = $price * $qty;
+
+      $processedItems[] = [
+        'product_id' => $item['product_id'],
+        'color_id'   => $item['color_id'], // مهم للإرسال لاحقاً
+        'size_id'    => $item['size_id'],  // مهم للإرسال لاحقاً
+        'color_name' => $item['color_name'],
+        'size_name'  => $item['size_name'],
+        'name'       => $item['name'] . ' (' . $item['color_name'] . ' - ' . $item['size_name'] . ')',
+        'qty'        => $qty,
+        'price'      => $price,
+        'cost'       => $variant->cost ?? 0,
+        'total'      => $total,
+        'is_printed' => $item['is_printed'],
+      ];
+      $grandTotal += $total;
+    }
+
+    $type = $this->determineInvoiceType($processedItems);
 
     return view('sale_proccess.invoice', [
-      'items' => collect($items)->map(fn($it) => [
-        'qty' => $it['qty'],
-        'name' => $it['name'],
-        'total' => $it['total'],
-        // لو محتاج تعرض price/cost في الـ Blade عدّل القالب
-        'price' => $it['price'],
-        'cost' => $it['cost'],
-      ]),
-      'type' => $type,
-      'grandTotal' => $totals['total'],
+      'items'      => collect($processedItems),
+      'type'       => $type,
+      'grandTotal' => $grandTotal,
     ]);
   }
 
-
-
-  public function store(StoreInvoiceRequest $request, ShiftService $shiftService)
+  /**
+   * وظيفة مساعدة لتحديد نوع الفاتورة
+   */
+  private function determineInvoiceType($items)
   {
+    $hasPrinted = collect($items)->contains('is_printed', 1);
+    $hasPlain = collect($items)->contains('is_printed', 0);
+
+    if ($hasPrinted && $hasPlain) return 'مختلطة';
+    if ($hasPrinted) return 'مطبوعات';
+    return 'سادة';
+  }
+
+  public function storeVariantStock(Request $request)
+  {
+    foreach ($request->items as $item) {
+      $stock = VariantStock::whereHas('variant', function ($q) use ($item) {
+        $q->where([
+          'product_id' => $item['product_id'],
+          'color_id'   => $item['color_id'],
+          'size_id'    => $item['size_id'],
+        ]);
+      })->where('is_printed', $item['is_printed'])->first();
+
+      $stock->decrement('quantity', $item['quantity']);
+    }
+
+    return response()->json(['success' => true]);
+  }
+
+
+public function store(StoreInvoiceRequest $request)
+{
     $validated = $request->validated();
     $user = Auth::user();
 
-
-    [$items, $totals] = $this->buildItemsFromRequest($validated['items']);
-    $type = $this->determineInvoiceType($items);
-
     try {
+        $invoice = DB::transaction(function () use ($validated, $user) {
+            $totalInvoicePrice = 0;
+            $totalInvoiceProfit = 0;
+            $itemsToSave = [];
 
-      $invoice = DB::transaction(function () use ($validated, $items, $totals, $type, $user, ) {
-        // 1) جمع متطلبات المنتجات per product_id
-        $productRequirements = [];
-        foreach ($items as $it) {
-          if ($it['item_type'] === 'product' && isset($it['product_id'])) {
-            $pid = $it['product_id'];
-            $productRequirements[$pid] = ($productRequirements[$pid] ?? 0) + $it['qty'];
-          }
-        }
+            foreach ($validated['items'] as $item) {
+                // 1. جلب الـ Variant بناءً على المنتج واللون والمقاس
+                $variant = ProductVariant::with('product')
+                    ->where('product_id', $item['product_id'])
+                    ->where('color_id', $item['color_id'] ?? null)
+                    ->where('size_id', $item['size_id'] ?? null)
+                    ->first();
 
-        // 2) تحقق من توفر المنتجات مع قفل FOR UPDATE
-        if (!empty($productRequirements)) {
-          $productIds = array_keys($productRequirements);
-          $products = Product::whereIn('id', $productIds)->lockForUpdate()->get()->keyBy('id');
+                if (!$variant) {
+                    throw new \RuntimeException("المنتج (اللون أو المقاس) غير متوفر في النظام", 422);
+                }
 
-          $shortages = [];
-          foreach ($productRequirements as $pid => $requiredQty) {
-            $product = $products->get($pid);
-            $available = $product ? $product->quantity : 0;
-            if ($available < $requiredQty) {
-             $shortages[] = [
-  'product_id'   => $pid,
-  'product_name' => $product?->name ?? 'منتج غير معروف',
-  'required'     => $requiredQty,
-  'available'    => $available,
-  'missing'      => $requiredQty - $available
-];
+                // 2. جلب المخزون من جدول variant_stocks بناءً على حالة الطباعة
+                $isPrinted = filter_var($item['is_printed'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                
+                $stock = VariantStock::where('product_variant_id', $variant->id)
+                    ->where('is_printed', $isPrinted)
+                    ->first();
 
+                $qty = (int)($item['qty'] ?? 1);
+                $availableQty = $stock ? $stock->quantity : 0;
+
+                // 3. التحقق من توفر الكمية
+                if ($availableQty < $qty) {
+                    $statusName = $isPrinted ? 'مطبوع' : 'سادة';
+                    throw new \RuntimeException(json_encode([
+                        [
+                            'product_name' => "{$variant->product->name} ({$item['color_name']} - {$item['size_name']}) [$statusName]", 
+                            'required' => $qty, 
+                            'available' => $availableQty
+                        ]
+                    ]), 422);
+                }
+
+                // 4. الحسابات المالية
+                $price = $variant->price;
+                $cost = $variant->cost;
+                $totalRowPrice = $price * $qty;
+                $totalRowProfit = ($price - $cost) * $qty;
+
+                $itemsToSave[] = [
+                    'item_type'  => 'product',
+                    'product_id' => $item['product_id'],
+                    'name'       => $variant->product->name,
+                    'color_name' => $item['color_name'] ?? '',
+                    'size_name'  => $item['size_name'] ?? '',
+                    'is_printed' => $isPrinted,
+                    'qty'        => $qty,
+                    'price'      => $price,
+                    'cost'       => $cost,
+                    'total'      => $totalRowPrice,
+                ];
+
+                $totalInvoicePrice += $totalRowPrice;
+                $totalInvoiceProfit += $totalRowProfit;
+
+                // 5. خصم الكمية من جدول variant_stocks
+                $stock->decrement('quantity', $qty);
             }
-          }
 
-          if (!empty($shortages)) {
-            throw new \RuntimeException(json_encode($shortages), 422);
-          }
-        }
+            // 6. إنشاء الفاتورة وحفظ العناصر (نفس كودك السابق)
+            $invoice = Invoice::create([
+                'invoice_number' => InvoiceNumber::next(),
+                'client_id'      => $validated['client_id'] ?? null,
+                'created_by'     => $user->id,
+                'type'           => $this->determineInvoiceType($itemsToSave),
+                'total'          => $totalInvoicePrice,
+                'profit'         => $totalInvoiceProfit,
+                'notes'          => $validated['notes'] ?? null,
+            ]);
 
-        // 3) إنشاء الفاتورة وسجّل البنود
-        $invoice = Invoice::create([
-          'invoice_number' => InvoiceNumber::next(),
-          'client_id' => $validated['client_id'] ?? null,
-          'type' => $type,
-          'total' => $totals['total'],
-          'profit' => $totals['profit'],
-          'notes' => $validated['notes'] ?? null,
+            foreach ($itemsToSave as $row) {
+                $row['invoice_id'] = $invoice->id;
+                InvoiceItem::create($row);
+            }
+
+            // تسجيل العملية
+            SystemAction::create([
+                'user_id' => $user->id,
+                'action' => 'sale_process',
+                'actionable_type' => Invoice::class,
+                'actionable_id' => $invoice->id,
+                'invoice_id' => $invoice->id,
+                'amount' => $invoice->total,
+                'note' => "إنشاء فاتورة بيع - #{$invoice->invoice_number}",
+                'meta' => json_encode($itemsToSave),
+                'ip' => request()->ip(),
+            ]);
+
+            return $invoice;
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'تم حفظ الفاتورة بنجاح',
+            'invoice_id' => $invoice->id
         ]);
 
-        foreach ($items as $it) {
-          $row = [
-            'invoice_id' => $invoice->id,
-            'item_type' => $it['item_type'],
-            'product_id' => $it['product_id'] ?? null,
-            'name' => $it['name'],
-            'qty' => $it['qty'],
-            'price' => $it['price'],
-            'cost' => $it['cost'],
-            'total' => $it['total'],
-            'description' => $it['description'] ?? null,
-          ];
-
-          InvoiceItem::create($row);
-
-          // لو المنتج موجود، قلل الكمية من جدول products
-          if ($it['item_type'] === 'product' && isset($it['product_id'])) {
-            Product::where('id', $it['product_id'])->decrement('quantity', $it['qty']);
-          }
-        }
-
-        // 4) سجل الـ system_action داخل نفس الـ transaction لربط الحدث بالفاتورة
-        SystemAction::create([
-          'user_id' => $user->id,
-          'action' => SystemActionType::SALE_PROCESS->value,
-          'actionable_type' => Invoice::class,
-          'actionable_id' => $invoice->id,
-          'invoice_id' => $invoice->id,
-          'amount' => $invoice->total,
-          'note' => "إنشاء فاتورة بيع منفصلة - #{$invoice->invoice_number}",
-          'meta' => json_encode([
-            'client_id' => $invoice->client_id,
-            'items' => $items,
-            'totals' => $totals,
-            'type' => $invoice->type,
-          ]),
-          'ip' => request()->ip(),
-          'source' => 'web',
-        ]);
-
-        return $invoice->load('items');
-      });
-
-      // لو وصل هنا معناه الفاتورة اتخلقت بنجاح والـ transaction انتهى commit
     } catch (\RuntimeException $e) {
-      
-      if ((int) $e->getCode() === 422) {
-        $shortages = json_decode($e->getMessage(), true);
-       return response()->json([
-  'status' => 'error',
-  'message' => '❌ لا يمكن إتمام الفاتورة بسبب نقص في المخزون',
-  'shortages' => $shortages,
-  'hint' => 'يرجى تعديل الكميات أو تحديث المخزون'
-], 400);
-
-      }
-      throw $e;
+        if ($e->getCode() === 422) {
+            $decodedMessage = json_decode($e->getMessage(), true);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'عذراً، يوجد نقص في المخزون',
+                'shortages' => is_array($decodedMessage) ? $decodedMessage : null,
+                'error_detail' => !is_array($decodedMessage) ? $e->getMessage() : null
+            ], 422);
+        }
+        throw $e;
     }
-
-   
-
-
-    return response()->json([
-      'message' => 'Invoice created successfully.',
-      'invoice' => $invoice
-    ]);
-  }
-
+}
 
 
   private function buildItemsFromRequest(array $requestItems): array
@@ -385,7 +344,7 @@ class InvoiceController extends Controller
           'cost' => $cost,
           'total' => $total,
         ];
-      } 
+      }
 
       $grandTotal += end($items)['total'];
       $grandProfit += (end($items)['price'] - end($items)['cost']) * end($items)['qty'];
@@ -394,11 +353,7 @@ class InvoiceController extends Controller
     return [$items, ['total' => round($grandTotal, 2), 'profit' => round($grandProfit, 2)]];
   }
 
-  private function determineInvoiceType(array $items): string
-  {
-    $types = collect($items)->pluck('item_type')->unique()->values()->all();
-    return count($types) === 1 ? $types[0] : 'mixed';
-  }
+
 
 
 
@@ -423,8 +378,6 @@ class InvoiceController extends Controller
     $invoiceCount = $invoice->count();
     $invoiceTotal = $invoice->sum('total');
     $invoices = $invoice->select('id', 'type', 'invoice_number', 'total')->get();
-    return view('clients.invoices', compact('invoiceCount', 'invoiceTotal', 'invoices','client'));
+    return view('clients.invoices', compact('invoiceCount', 'invoiceTotal', 'invoices', 'client'));
   }
-
 }
-

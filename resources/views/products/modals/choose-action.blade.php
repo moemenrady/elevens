@@ -12,10 +12,7 @@
                 هضيف منتج
                 </button>
 
-                <button class="btn btn-lg w-100 fw-bold btn-gradient-alt" data-bs-target="#addQuantityModal"
-                    data-bs-toggle="modal" data-bs-dismiss="modal">
-                    هضيف كمية لمنتج موجود
-                </button>
+               
             </div>
         </div>
     </div>

@@ -3,10 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>الفاتورة</title>
+    <title>معاينة الفاتورة - {{ $type }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
+        /* التنسيقات الخاصة بك كما هي مع تحسينات بسيطة */
         :root {
             --prime: #ddcdbc;
             --prime-soft: #e6ddd4;
@@ -21,6 +21,7 @@
             font-family: system-ui, sans-serif;
             background: linear-gradient(180deg, var(--bg), var(--bg-dark));
             color: var(--white);
+            min-height: 100vh;
         }
 
         .page {
@@ -47,6 +48,7 @@
 
         .header h2 {
             color: var(--prime);
+            margin: 0;
             font-size: 22px;
             font-weight: 900;
         }
@@ -61,24 +63,37 @@
             cursor: pointer;
         }
 
-        .summary {
+        .summary-banner {
+            background: rgba(221, 205, 188, 0.15);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--prime);
+        }
+
+        .summary-banner div {
             font-size: 18px;
             font-weight: 900;
             color: var(--prime);
-            margin-bottom: 14px;
+        }
+
+        .type-badge {
+            background: var(--prime);
+            color: var(--bg);
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 14px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 14px;
             background: rgba(255, 255, 255, .03);
             border-radius: 12px;
             overflow: hidden;
-        }
-
-        thead {
-            background: rgba(221, 205, 188, .15);
         }
 
         th,
@@ -91,6 +106,7 @@
         th {
             color: var(--prime);
             font-weight: 800;
+            background: rgba(221, 205, 188, .1);
         }
 
         td.name {
@@ -106,7 +122,7 @@
         .actions {
             display: flex;
             justify-content: space-between;
-            margin-top: 18px;
+            margin-top: 25px;
             gap: 10px;
             flex-wrap: wrap;
         }
@@ -114,9 +130,10 @@
         button {
             border: none;
             border-radius: 14px;
-            padding: 10px 18px;
+            padding: 12px 24px;
             font-weight: 800;
             cursor: pointer;
+            transition: 0.3s;
         }
 
         .btn-cancel {
@@ -132,13 +149,13 @@
         .btn-done {
             background: linear-gradient(135deg, var(--prime), var(--prime-soft));
             color: var(--bg);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
         }
 
         .btn-done:hover {
             transform: scale(1.05);
         }
 
-        /* Mobile cards */
         @media (max-width: 640px) {
             table {
                 display: none;
@@ -156,6 +173,7 @@
                 padding: 14px;
                 display: flex;
                 justify-content: space-between;
+                align-items: center;
             }
 
             .qty {
@@ -164,21 +182,23 @@
                 border-radius: 8px;
                 padding: 4px 10px;
                 font-weight: 900;
+                margin-left: 10px;
+            }
+
+            .card-info {
+                flex-grow: 1;
+                text-align: right;
             }
 
             .name {
                 font-weight: 800;
                 color: var(--prime);
+                display: block;
             }
 
             .price {
-                font-size: 13px;
-                color: #ddd;
-            }
-
-            .total {
-                color: #b6ffb6;
-                font-weight: 900;
+                font-size: 12px;
+                color: #ccc;
             }
         }
     </style>
@@ -187,30 +207,23 @@
 <body>
 
     <div class="page">
-
         <div class="header">
-            <button class="back-btn" onclick="history.back()">← رجوع</button>
-            <h2>الفاتورة</h2>
+            <button class="back-btn" onclick="history.back()">← تعديل السلة</button>
+            <h2>معاينة الفاتورة</h2>
         </div>
 
         <div class="invoice-box">
-
-            @php $grandTotal = 0; @endphp
-            @foreach ($items as $item)
-                @php $grandTotal += $item['total']; @endphp
-            @endforeach
-
-            <div class="summary">
-                الإجمالي: {{ $grandTotal }} جنيه
+            <div class="summary-banner">
+                <div>الإجمالي النهائي: {{ number_format($grandTotal, 2) }} جنيه</div>
+                <span class="type-badge">نوع الفاتورة: {{ $type }}</span>
             </div>
 
-            <!-- جدول الديسكتوب -->
             <table>
                 <thead>
                     <tr>
-                        <th>عدد</th>
-                        <th>المنتج</th>
-                        <th>السعر</th>
+                        <th>العدد</th>
+                        <th style="text-align: right;">المنتج والتفاصيل</th>
+                        <th>سعر الوحدة</th>
                         <th>الإجمالي</th>
                     </tr>
                 </thead>
@@ -219,66 +232,64 @@
                         <tr>
                             <td>{{ $item['qty'] }}</td>
                             <td class="name">{{ $item['name'] }}</td>
-                            <td>{{ $item['price'] ?? '-' }}</td>
-                            <td class="total">{{ $item['total'] }}</td>
+                            <td>{{ number_format($item['price'], 2) }}</td>
+                            <td class="total">{{ number_format($item['total'], 2) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
 
-            <!-- كروت الموبايل -->
-            <div class="cards">
+            <div class="cards" style="display: none;">
                 @foreach ($items as $item)
                     <div class="card-item">
-                        <div class="card-left">
-                            <div class="qty">{{ $item['qty'] }}</div>
-                            <div>
-                                <div class="name">{{ $item['name'] }}</div>
-                                <div class="price">سعر الوحدة: {{ $item['price'] ?? '-' }}</div>
-                            </div>
+                        <div class="qty">{{ $item['qty'] }}</div>
+                        <div class="card-info">
+                            <span class="name">{{ $item['name'] }}</span>
+                            <span class="price">سعر: {{ number_format($item['price'], 2) }}</span>
                         </div>
-                        <div class="total">{{ $item['total'] }}</div>
+                        <div class="total">{{ number_format($item['total'], 2) }}</div>
                     </div>
                 @endforeach
             </div>
 
-            <!-- فورم الإرسال -->
-            <form id="invoiceForm" style="margin-top:12px;">
+            <form id="invoiceForm">
                 @csrf
-
                 @foreach ($items as $index => $item)
-                    <input type="hidden" name="items[{{ $index }}][item_type]" value="product">
-                    <input type="hidden" name="items[{{ $index }}][product_id]" value="{{ $item['id'] }}">
+                    <input type="hidden" name="items[{{ $index }}][product_id]"
+                        value="{{ $item['product_id'] }}">
                     <input type="hidden" name="items[{{ $index }}][qty]" value="{{ $item['qty'] }}">
+                    <input type="hidden" name="items[{{ $index }}][is_printed]"
+                        value="{{ $item['is_printed'] }}">
+
+                    <input type="hidden" name="items[{{ $index }}][color_id]"
+                        value="{{ $item['color_id'] ?? '' }}">
+                    <input type="hidden" name="items[{{ $index }}][size_id]"
+                        value="{{ $item['size_id'] ?? '' }}">
+                    <input type="hidden" name="items[{{ $index }}][color_name]"
+                        value="{{ $item['color_name'] ?? '' }}">
+                    <input type="hidden" name="items[{{ $index }}][size_name]"
+                        value="{{ $item['size_name'] ?? '' }}">
                 @endforeach
 
 
                 <div class="actions">
                     <div>
-                        <button type="button" class="btn-cancel"
-                            onclick="window.location.replace('{{ route('sale_proccess.create') }}')">
-                            إلغاء
-                        </button>
-
-                        <button type="button" class="btn-print" onclick="openPrintForm()">
-                            طباعة
-                        </button>
+                        <button type="button" class="btn-cancel" onclick="history.back()">إلغاء</button>
+                        <button type="button" class="btn-print" onclick="openPrintForm()">🖨️ طباعة</button>
                     </div>
-
-                    <button type="submit" class="btn-done">
-                        إتمام الفاتورة
-                    </button>
+                    <button type="submit" class="btn-done">✅ إتمام وحفظ الفاتورة</button>
                 </div>
             </form>
 
-            <!-- فورم الطباعة -->
             <form id="printForm" action="{{ route('invoices.print') }}" method="POST" target="_blank"
                 style="display:none;">
                 @csrf
+                <input type="hidden" name="grandTotal" value="{{ $grandTotal }}">
                 @foreach ($items as $index => $item)
                     <input type="hidden" name="items[{{ $index }}][qty]" value="{{ $item['qty'] }}">
                     <input type="hidden" name="items[{{ $index }}][name]" value="{{ $item['name'] }}">
-                    <input type="hidden" name="items[{{ $index }}][price]" value="{{ $item['price'] ?? '' }}">
+                    <input type="hidden" name="items[{{ $index }}][price]" value="{{ $item['price'] }}">
+                    <input type="hidden" name="items[{{ $index }}][total]" value="{{ $item['total'] }}">
                 @endforeach
             </form>
 
@@ -290,29 +301,51 @@
             document.getElementById('printForm').submit();
         }
 
-        document.getElementById('invoiceForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+       document.getElementById('invoiceForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
 
-            const res = await fetch("{{ route('invoices.store') }}", {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
-                    'Accept': 'application/json',
-                },
-                body: new FormData(this)
-            });
+    const btn = this.querySelector('.btn-done');
+    const originalText = btn.innerText;
+    btn.innerText = 'جاري الحفظ...';
+    btn.disabled = true;
 
-            const data = await res.json();
-
-            if (res.ok) {
-                alert('تم إنشاء الفاتورة بنجاح');
-                window.location.href = "{{ route('main.create') }}";
-            } else {
-                alert(data.message || 'حدث خطأ');
-            }
+    try {
+        const res = await fetch("{{ route('invoices.store') }}", {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                'Accept': 'application/json',
+            },
+            body: new FormData(this)
         });
-    </script>
 
+        const data = await res.json();
+
+        if (res.ok) {
+            alert('✅ تم إنشاء الفاتورة وحسم الكميات بنجاح');
+            window.location.href = "{{ route('invoice.index') }}";
+        } else {
+            // معالجة رسالة نقص المخزون بشكل احترافي
+            if (data.shortages) {
+                let errorMsg = '❌ لا يوجد مخزون كافٍ لـ:\n';
+                data.shortages.forEach(item => {
+                    errorMsg += `- ${item.product_name}: مطلوب (${item.required}), متاح (${item.available})\n`;
+                });
+                alert(errorMsg);
+            } else {
+                alert(data.message || 'حدث خطأ غير متوقع');
+            }
+            
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    } catch (error) {
+        alert('فشل الاتصال بالسيرفر');
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+});
+    </script>
 </body>
 
 </html>

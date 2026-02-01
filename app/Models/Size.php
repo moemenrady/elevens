@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Product extends Model
+class Size extends Model
 {
     protected $fillable = ['name'];
 
@@ -12,5 +12,5 @@ class Product extends Model
     {
         return $this->hasMany(ProductVariant::class);
     }
-    
 }
+

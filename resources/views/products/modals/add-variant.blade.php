@@ -6,13 +6,36 @@
                 <button type="button" class="btn-close me-auto" data-bs-dismiss="modal"></button>
                 <h5 class="modal-title mx-auto">منتج جديد</h5>
             </div>
-            <form action="{{ route('products.store') }}" method="POST">
-                @csrf
-                <label>اسم المنتج</label>
-                <input type="text" name="name" class="form-control" required>
 
-                <button class="btn btn-gradient mt-3">حفظ</button>
+            <form action="{{ route('variants.store') }}" method="POST">
+                @csrf
+
+                <select name="product_id" required>
+                    @foreach ($products as $product)
+                        <option value="{{ $product->id }}">{{ $product->name }}</option>
+                    @endforeach
+                </select>
+
+                <select name="color_id" required>
+                    @foreach ($colors as $color)
+                        <option value="{{ $color->id }}">{{ $color->name }}</option>
+                    @endforeach
+                </select>
+
+                <select name="size_id" required>
+                    @foreach ($sizes as $size)
+                        <option value="{{ $size->id }}">{{ $size->name }}</option>
+                    @endforeach
+                </select>
+
+                <input type="number" name="price" placeholder="سعر البيع" required>
+                <input type="number" name="cost" placeholder="التكلفة" required>
+                <input type="number" name="quantity" placeholder="الكمية" required>
+                <input type="number" name="min_quantity" placeholder="الحد الأدنى" required>
+
+                <button class="btn btn-gradient mt-3">حفظ الصنف</button>
             </form>
+
 
         </div>
     </div>

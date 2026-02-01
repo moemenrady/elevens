@@ -262,7 +262,7 @@
             left: 50%;
             transform: translateX(-50%);
             background: rgba(221, 205, 188, 0.18);
-        
+
             border-radius: 20px;
             padding: 10px 16px;
             display: flex;
@@ -277,7 +277,8 @@
             align-items: center;
             gap: 4px;
             text-decoration: none;
-            color: rgba(221, 205, 188, 0.18);;
+            color: rgba(221, 205, 188, 0.18);
+            ;
             font-size: 12px;
             font-weight: 600;
             padding: 10px 12px;
@@ -291,7 +292,8 @@
         }
 
         .nav-link:hover {
-            background:rgba(221, 205, 188, 0.18);;
+            background: rgba(221, 205, 188, 0.18);
+            ;
             color: #3f4526;
             transform: translateY(-2px);
         }
@@ -331,8 +333,6 @@
     <link rel="stylesheet" href="{{ asset('css/style.css') }}">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
 
@@ -428,7 +428,7 @@
 
             <ul class="drawer-links">
                 <li>
-                    <a href="#" id="logout-btn" role="button">
+                    <a href="{{ route('logout') }}" id="logout-btn" role="button">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                             stroke-linejoin="round" style="vertical-align:middle; margin-right:6px;">
@@ -467,55 +467,7 @@
     </footer>
 
 
-    <!-- JavaScript -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const logoutForm = document.getElementById('logout-form');
-            const logoutBtn = document.getElementById('logout-btn');
 
-            if (!logoutForm || !logoutBtn) return;
-
-            logoutBtn.addEventListener('click', function(e) {
-                e.preventDefault(); // نمنع الإرسال التلقائي
-
-                // نطلب من السيرفر إذا في شيفت مفتوح
-                fetch("{{ route('shift.check') }}", {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                }).then(async response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    const data = await response.json();
-
-                    if (data.open) {
-                        // رسالة تأكيد بسيطة:
-                        const proceed = confirm(
-                            "لديك شيفت مفتوح.\nهل تريد تسجيل الخروج دون غلق الشيفت؟\n[OK] لتسجيل الخروج دون إغلاق الشيفت، [Cancel] لإلغاء تسجيل الخروج"
-                        );
-                        if (proceed) {
-                            logoutForm.submit();
-                        } else {
-                            // إلغاء تسجيل الخروج — يمكن إضافة إشعار للمستخدم هنا
-                        }
-                    } else {
-                        // لا شيفت مفتوح -> نكمل تسجيل الخروج مباشرة
-                        logoutForm.submit();
-                    }
-                }).catch(err => {
-                    console.error('Error checking open shift:', err);
-                    // لو فشل الفحص نعرض خيار للمستخدم بدلاً من منع الخروج نهائياً
-                    const proceedAnyway = confirm(
-                        "تعذر التحقق من حالة الشيفت.\nهل تود المتابعة وتسجيل الخروج؟");
-                    if (proceedAnyway) {
-                        logoutForm.submit();
-                    }
-                    // وإلا نلغي تسجيل الخروج
-                });
-            });
-        });
-    </script>
 
     <script>
         function toggleDrawer() {
@@ -542,10 +494,10 @@
         @endif
     </script>
 
-
+    {{-- 
     <form id="start-shift-form" action="{{ route('shift.start') }}" method="POST" style="display:none;">
         @csrf
-    </form>
+    </form> --}}
 
 </body>
 
