@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\ApiSystemActionController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\DynamicMenuController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ShiftController;
@@ -11,10 +12,7 @@ use Illuminate\Http\Request;
 
 
 
-
-
 Route::middleware('auth')->group(function () {
-
 
   Route::get('/products/{product}/colors', [ProductController::class, 'colors']);
   Route::get('/variants/sizes', [ProductController::class, 'sizes']);
@@ -54,14 +52,27 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__ . '/auth.php';
+require __DIR__ . '/dashboard.php';
+require __DIR__ . '/analytics.php';
+require __DIR__ . '/capitals.php';
+require __DIR__ . '/expense_types.php';
+require __DIR__ . '/expenses.php';
+require __DIR__ . '/transactions.php';
+require __DIR__ . '/users.php';
+require __DIR__ . '/users.php';
+require __DIR__ . '/partners.php';
+require __DIR__ . '/sessions.php';
+require __DIR__ . '/sales.php';
+require __DIR__ . '/ingredient.php';
+require __DIR__ . '/invoices.php';
+require __DIR__ . '/subscriptions.php';
+require __DIR__ . '/bookings.php';
+require __DIR__ . '/daily.php';
+require __DIR__ . '/setion_not_added.php';
+require __DIR__ . '/employee_transactions.php';
+require __DIR__ . '/employees.php';
+require __DIR__ . '/supervisor.php';
 require __DIR__ . '/products.php';
+require __DIR__ . '/clients.php';
 require __DIR__ . '/managment.php';
-require __DIR__ . '/main.php';
-require __DIR__ . '/invoices.php';
-require __DIR__ . '/invoices.php';
-require __DIR__ . '/variant_stock.php';
-require __DIR__ . '/product_variant.php';
-// require __DIR__ . '/clients.php';
-// require __DIR__ . '/expenses.php';
-// require __DIR__ . '/analytics.php';
-// require __DIR__ . '/daily.php'; 
+require __DIR__ . '/client_menu.php'; 

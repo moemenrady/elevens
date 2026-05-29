@@ -1,6 +1,4 @@
 <?php return array (
-
-
   'laravel/sanctum' => 
   array (
     'providers' => 
@@ -34,7 +32,6 @@
       0 => 'Carbon\\Laravel\\ServiceProvider',
     ),
   ),
-
   'nunomaduro/termwind' => 
   array (
     'providers' => 
@@ -42,5 +39,4 @@
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
     ),
   ),
- 
 );

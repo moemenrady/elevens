@@ -12,27 +12,33 @@ return new class extends Migration {
   {
     Schema::create('invoices', function (Blueprint $table) {
       $table->id();
-      $table->string('invoice_number')->unique();
+        $table->string('invoice_number')->nullable();
 
-      // ربط العميل
+      $table->foreignId('booking_id')
+        ->nullable()
+        ->unique()
+        ->constrained('bookings')
+        ->nullOnDelete();
+
       $table->foreignId('client_id')
         ->nullable()
         ->constrained()
         ->nullOnDelete();
 
-      // ربط المستخدم الذي أنشأ الفاتورة
+      // العمود الجديد: user الذي أنشأ الفاتورة
       $table->foreignId('created_by')
         ->nullable()
         ->constrained('users')
-        ->nullOnDelete();
+        ->nullOnDelete()
+        ->after('client_id');
 
+      $table->enum('type', ['product', 'subscription', 'booking', 'session', 'deposit', 'mixed']);
       $table->decimal('total', 12, 2);
       $table->decimal('profit', 12, 2)->default(0);
       $table->text('notes')->nullable();
       $table->timestamps();
 
-      // تم حذف الـ type من الفهرس هنا
-      $table->index('client_id');
+      $table->index(['client_id', 'type']);
     });
   }
   public function down(): void

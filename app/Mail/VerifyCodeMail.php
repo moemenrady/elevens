@@ -8,7 +8,7 @@ use Illuminate\Queue\SerializesModels;
 
 class VerifyCodeMail extends Mailable
 {
-use Queueable, SerializesModels;
+    use Queueable, SerializesModels;
 
     public $user;
     public $code;
@@ -21,11 +21,11 @@ use Queueable, SerializesModels;
 
     public function build()
     {
-        return $this->subject('رمز التحقق - تحقق من بريدك')
-                    ->view('auth.verify_code')
-                    ->with([
-                        'name' => $this->user->name,
-                        'code' => $this->code,
-                    ]);
+        return $this->subject('كود التحقق')
+            ->view('emails.verify-code')
+            ->with([
+                'user' => $this->user,
+                'code' => $this->code,
+            ]);
     }
 }

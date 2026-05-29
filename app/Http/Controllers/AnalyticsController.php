@@ -6,12 +6,68 @@ use App\Models\Expense;
 use App\Models\ExpenseType;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Transaction;
 use DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Services\AnalyticsService;
+
 class AnalyticsController extends Controller
 {
+
+  public function index(Request $request)
+  {
+    // 1. استقبال تواريخ الفلتر
+    $fromDate = $request->input('from_date');
+    $toDate = $request->input('to_date');
+
+    // 2. بناء الاستعلام الأساسي للمصاريف فقط (type = 'out')
+    $query = Transaction::where('type', 'out');
+
+    // تطبيق فلتر التاريخ إذا وُجد
+    if ($fromDate) {
+      $query->whereDate('created_at', '>=', $fromDate);
+    }
+    if ($toDate) {
+      $query->whereDate('created_at', '<=', $toDate);
+    }
+
+    // 3. حساب إجمالي ما تم صرفه بناءً على الفلتر
+    $totalSpent = (float) $query->sum('amount');
+
+    // 4. جلب توزيع المصاريف لكل بند (تصنيف)
+    // سنقوم بجلب الأنواع مع حساب مجموع مبالغها وعدد حركاتها في استعلام واحد
+    $typesReport = ExpenseType::withSum(['transactions' => function ($q) use ($fromDate, $toDate) {
+      $q->where('type', 'out');
+      if ($fromDate) $q->whereDate('created_at', '>=', $fromDate);
+      if ($toDate) $q->whereDate('created_at', '<=', $toDate);
+    }], 'amount')
+      ->withCount(['transactions' => function ($q) use ($fromDate, $toDate) {
+        $q->where('type', 'out');
+        if ($fromDate) $q->whereDate('created_at', '>=', $fromDate);
+        if ($toDate) $q->whereDate('created_at', '<=', $toDate);
+      }])
+      ->get();
+
+    // ملاحظة: Laravel تلقائياً سيسمي الحقول المضافة:
+    // transactions_sum_amount و transactions_count
+    // سنقوم بعمل map بسيط لتتوافق مع المسميات في الـ View الذي صممناه
+    $typesReport = $typesReport->map(function ($item) {
+      $item->expenses_sum_amount = $item->transactions_sum_amount ?? 0;
+      $item->expenses_count = $item->transactions_count ?? 0;
+      return $item;
+    });
+
+    // 5. تحديد أعلى بند صرف
+    $topType = $typesReport->sortByDesc('expenses_sum_amount')->first();
+
+    // 6. العودة للـ View مع البيانات
+    return view('dashboard.analytics.index', compact(
+      'totalSpent',
+      'typesReport',
+      'topType'
+    ));
+  }
   protected $analytics;
 
   public function __construct(AnalyticsService $analytics)
@@ -517,5 +573,4 @@ class AnalyticsController extends Controller
       'topService'
     ));
   }
-
 }

@@ -12,8 +12,9 @@ return new class extends Migration {
   {
     Schema::create('expenses', function (Blueprint $table) {
       $table->id();
-      $table->foreignId('expense_type_id')->constrained('expense_types')->onDelete('cascade');
       $table->decimal('amount', 10, 2); // قيمة المصروف
+
+      $table->foreignId('expense_type_id')->constrained('expense_types')->onDelete('cascade');
       $table->text('note')->nullable();
       $table->foreignId('added_by')->constrained('users')->onDelete('cascade'); // الادمن اللي ضاف المصروف
       $table->timestamps();

@@ -1,6 +1,6 @@
-<!-- php
-use Illuminate\Support\Facades\Route;
+<?php
 
+use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ClientController;
 
 Route::middleware('auth')->group(function () {
@@ -22,4 +22,4 @@ Route::middleware('auth')->group(function () {
 
 
 });
- -->
+

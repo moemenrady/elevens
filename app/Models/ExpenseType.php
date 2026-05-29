@@ -6,15 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExpenseType extends Model
 {
-    protected $fillable = ['name','setter_name', 'user_appearance','is_product_material' ];
+    protected $fillable = [
+        'name',
+        'setter_name',
+        'user_appearance',
+    ];
 
-    public function drafts()
+    public function transactions()
     {
-        return $this->hasMany(ExpenseDraft::class, 'expense_type_id');
+        return $this->hasMany(Transaction::class);
     }
-    public function expenses()
-{
-    return $this->hasMany(Expense::class, 'expense_type_id');
-}
-
 }
