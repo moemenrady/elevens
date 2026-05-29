@@ -7,53 +7,115 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use SoftDeletes;
-    public $incrementing = false;
-    protected $keyType = 'int';
+  use SoftDeletes;
 
-    protected $fillable = [
-        'id',
-        'name',
-        'description',
-        'image',
-        'is_available',
-        'is_featured',
-        'sort_order',
-        'price',
-        'cost',
-        'quantity',
-        'min_quantity',
-        'category_id',
-        'is_produced'
-    ];
+  protected $fillable = [
+    'category_id',
+    'name',
+    'description',
+    'price',
+    'cost',
+    'quantity',
+    'min_quantity',
+    'is_produced',
+    'image',
+    'is_available',
+    'is_featured',
+    'sort_order',
+  ];
 
+  protected $casts = [
+    'price' => 'decimal:2',
+    'cost' => 'decimal:2',
 
+    'quantity' => 'integer',
+    'min_quantity' => 'integer',
 
-    public function purchases()
-    {
-        return $this->hasMany(SessionPurchase::class);
+    'is_produced' => 'boolean',
+    'is_available' => 'boolean',
+    'is_featured' => 'boolean',
+  ];
+
+  /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
+  public function category()
+  {
+    return $this->belongsTo(Category::class);
+  }
+
+  public function purchases()
+  {
+    return $this->hasMany(SessionPurchase::class);
+  }
+
+  public function importantProducts()
+  {
+    return $this->hasMany(ImportantProduct::class);
+  }
+
+  public function recipe()
+  {
+    return $this->hasMany(ProductRecipe::class);
+  }
+
+  public function ingredients()
+  {
+    return $this->belongsToMany(
+      Ingredient::class,
+      'product_recipes'
+    )->withPivot([
+      'amount',
+      'unit_id',
+    ]);
+  }
+
+  public function transactions()
+  {
+    return $this->hasMany(EmployeeTransaction::class);
+  }
+
+  /*
+    |--------------------------------------------------------------------------
+    | Scopes
+    |--------------------------------------------------------------------------
+    */
+
+  public function scopeAvailable($query)
+  {
+    return $query->where('is_available', true);
+  }
+
+  public function scopeFeatured($query)
+  {
+    return $query->where('is_featured', true);
+  }
+
+  /*
+    |--------------------------------------------------------------------------
+    | Accessors
+    |--------------------------------------------------------------------------
+    */
+
+  public function getImageUrlAttribute()
+  {
+    if (!$this->image) {
+      return null;
     }
 
-    public function important_products()
-    {
-        return $this->hasMany(ImportantProduct::class);
-    }
+    return asset('storage/' . $this->image);
+  }
 
-    public function recipe()
-    {
-        return $this->hasMany(ProductRecipe::class);
-    }
-    public function ingredients()
-    {
-        return $this->belongsToMany(Ingredient::class, 'product_recipes')
-            ->withPivot('amount', 'unit_id');
-    }
-    public function category()
-    {
-        return $this->belongsTo(Category::class);
-    }
-    public function transactions()
-    {
-        return $this->hasMany(EmployeeTransaction::class);
-    }
+  public function getProfitAttribute()
+  {
+    return $this->price - $this->cost;
+  }
+
+  public function getIsLowStockAttribute()
+  {
+    return $this->quantity <= $this->min_quantity;
+  }
 }

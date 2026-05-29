@@ -7,53 +7,41 @@ use Illuminate\Http\Request;
 
 class ExpenseTypeController extends Controller
 {
-
-    public function index()
+    /**
+     * عرض صفحة create مع أنواع المصروفات - يدعم فلتر الظهور عبر query string
+     */
+    public function create(Request $request)
     {
-        // جلب الأنواع مع المصاريف المرتبطة بها لحساب الإجمالي
-        $expenseTypes = ExpenseType::with('transactions')->get();
-        return view('dashboard.expense_types.index', compact('expenseTypes'));
+        // فلتر الظهور من query string، الافتراضي 'all'
+        $appearanceFilter = $request->query('appearance', 'all');
+
+        if ($appearanceFilter === 'admin') {
+            // عرض أنواع خاصة بالإدارة فقط (user_appearance = false)
+            $records = ExpenseType::where('user_appearance', false)->latest()->get();
+        } else {
+            // عرض الكل
+            $records = ExpenseType::latest()->get();
+        }
+
+        return view('managment.changes.expense-types.create', compact('records'));
     }
 
+    /**
+     * تخزين نوع مصروف جديد
+     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'setter_name' => 'required|string|max:255',
+        // ✅ التحقق من المدخلات (مطابق لأسلوب HallController)
+        $validated = $request->validate([
+            'name'            => 'required|string|max:50',
+            'setter_name'     => 'required|string|max:50',
+            'user_appearance' => 'required|boolean',
         ]);
 
-        $expenseType = ExpenseType::create($data);
+        // ✅ الحفظ في قاعدة البيانات
+        ExpenseType::create($validated);
 
-        return  redirect()->back()->with([
-            'success' => true,
-            'message' => 'تم إضافة نوع المصروف بنجاح 💰',
-            'data' => $expenseType
-        ]);
-    }
-
-    public function update(Request $request, $id)
-    {
-        $type = ExpenseType::findOrFail($id);
-
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'setter_name' => 'required|string|max:255',
-        ]);
-
-        $type->update($data);
-        return  redirect()->back()->with([
-            'success' => true,
-            'message' => 'تم تحديث البيانات بنجاح ✅',
-            'data' => $type
-        ]);
-    }
-
-    public function destroy($id)
-    {
-        ExpenseType::findOrFail($id)->delete();
-        return  redirect()->back()->with([
-            'success' => true,
-            'message' => 'تم حذف النوع بنجاح 🗑️'
-        ]);
+        // ✅ رجوع برسالة نجاح
+        return redirect()->back()->with('success', 'تم إضافة نوع المصروف بنجاح 🎉');
     }
 }

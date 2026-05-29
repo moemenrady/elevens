@@ -7,23 +7,23 @@ use Illuminate\Database\Eloquent\Model;
 class Booking extends Model
 {
     // app/Models/Booking.php
-protected $fillable = [
-    'hall_id',
-    'client_id',
-    'title',
-    'attendees',
-    'start_at',
-    'duration_minutes',
-    'end_at',
-    'real_start_at',
-    'real_end_at',
-    'status',
-    'base_hour_price',
-    'extra_person_hour_price',
-    'min_capacity_snapshot',
-    'estimated_total',
-    'real_total', // <-- صححت الاسم ليطابق migration
-];
+    protected $fillable = [
+        'hall_id',
+        'client_id',
+        'title',
+        'attendees',
+        'start_at',
+        'duration_minutes',
+        'end_at',
+        'real_start_at',
+        'real_end_at',
+        'status',
+        'base_hour_price',
+        'extra_person_hour_price',
+        'min_capacity_snapshot',
+        'estimated_total',
+        'real_total', // <-- صححت الاسم ليطابق migration
+    ];
 
 
 
@@ -54,15 +54,18 @@ protected $fillable = [
     {
         return $this->hasMany(BookingPurchase::class);
     }
-public function invoice()
-{
-    return $this->hasOne(Invoice::class, 'booking_id');
-}
+    public function invoice()
+    {
+        return $this->hasOne(Invoice::class, 'booking_id');
+    }
     public function invoiceItems()
     {
         return $this->hasMany(InvoiceItem::class);
     }
-
+    public function timeSlots()
+    {
+        return $this->hasMany(PrivateSessionTimeSlot::class);
+    }
     public function scopeOverlaps($q, $start, $end)
     {
         return $q->where(function ($query) use ($start, $end) {
@@ -75,9 +78,8 @@ public function invoice()
         });
     }
     // app/Models/Booking.php
-public function scopeActiveStatuses($query)
-{
-    return $query->whereIn('status', ['scheduled', 'due', 'in_progress']);
-}
-
+    public function scopeActiveStatuses($query)
+    {
+        return $query->whereIn('status', ['scheduled', 'due', 'in_progress']);
+    }
 }

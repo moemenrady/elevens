@@ -3,895 +3,651 @@
 @section('title', "تفاصيل المنتج — {$product->name}")
 
 @section('content')
-    <div class="product-container">
-        <div class="main-product-card fade-in">
-            {{-- الرأس: اسم المنتج والتحكم --}}
-            <div class="product-header-section">
-                <div class="info">
-                    <span class="category-label">📦 منتج</span>
-                    <h1 class="product-title">{{ $product->name }}</h1>
-                    <div class="product-meta">
-                        <span class="meta-item">ID: {{ $product->id }}</span>
-                    </div>
+    <div class="product-container fade-in">
+        <div class="card">
+            <div class="card-header">
+                <div class="header-left">
+                    <span class="badge">#{{ $product->id }}</span>
+                    <h2>🛒 تفاصيل المنتج</h2>
                 </div>
-                <button type="button" class="btn-modern edit" onclick="openEditProductNameModal()">
-                    <span>✏️</span> تعديل الاسم
-                </button>
-            </div>
-            {{-- قسم الألوان والمقاسات --}}
-            <div class="variants-section">
-                <div class="section-title-wrapper">
-                    <h3>🎨 الألوان والمخزون</h3>
-                    <a href="{{ route('variants.create', $product->id) }}" class="btn-modern success">
-                        <span>➕</span> إضافة تنوع جديد
-                    </a>
-                </div>
-
-                @foreach ($colors as $colorId => $variants)
-                    <div class="color-group">
-                        {{-- بطاقة اللون --}}
-                        <div class="color-header" onclick="toggleSizes({{ $colorId }})">
-                            <div class="color-info">
-                                <span class="color-dot"
-                                    style="background-color: {{ strtolower($variants->first()->color->name) == 'white' ? '#fff' : (strtolower($variants->first()->color->name) == 'black' ? '#000' : '#515831') }}; border: 1px solid #ddd;"></span>
-                                <span class="color-name">{{ $variants->first()->color->name }}</span>
-                            </div>
-                            <div class="color-summary">
-                                <span class="total-qty">📦 {{ $variants->sum(fn($v) => $v->stocks->sum('quantity')) }}
-                                    قطعة</span>
-                                <span class="toggle-icon">▼</span>
-                            </div>
-                        </div>
-
-                        {{-- تفاصيل المقاسات داخل اللون --}}
-                        <div class="sizes-container d-none" id="sizes-{{ $colorId }}">
-                            <table class="sizes-table">
-                                <thead>
-                                    <tr>
-                                        <th>المقاس</th>
-                                        <th>إجمالي</th>
-                                        <th>🖨️ مخزون مطبوع</th>
-                                        <th>👕 مخزون سادة</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($variants->groupBy('size_id') as $sizeVariants)
-                                        @php $variant = $sizeVariants->first(); @endphp
-                                        <tr>
-                                            <td class="size-name-cell"><strong>{{ $variant->size->name }}</strong></td>
-                                            <td><span class="qty-badge total">{{ $variant->stocks->sum('quantity') }}</span>
-                                            </td>
-                                            <td>
-                                                <div class="stock-action-wrapper">
-                                                    <span
-                                                        class="qty-num printed-text">{{ $variant->printedStock->quantity ?? 0 }}</span>
-                                                    <button class="btn-add-stock printed"
-                                                        onclick="openAddStock({{ $variant->id }}, 1)">
-                                                        <span>➕</span> مطبوع
-                                                    </button>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div class="stock-action-wrapper">
-                                                    <span
-                                                        class="qty-num plain-text">{{ $variant->plainStock->quantity ?? 0 }}</span>
-                                                    <button class="btn-add-stock plain"
-                                                        onclick="openAddStock({{ $variant->id }}, 0)">
-                                                        <span>➕</span> سادة
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                @endforeach
-
-
-
+                <a href="#" id="openEditModal" class="btn edit-btn" data-bs-toggle="modal"
+                    data-bs-target="#editProductModal">
+                    ✏️ تعديل
+                </a>
             </div>
 
+            {{-- بيانات أساسية --}}
+            <div class="section product-main">
+                <div class="box">
+                    <div class="row">
+                        <div class="col">
+                            <label class="lbl">📦 الاسم</label>
+                            <p class="value">{{ $product->name }}</p>
+                        </div>
+                        <div class="col">
+                            <label class="lbl">💰 سعر البيع</label>
+                            <p class="value gold">{{ number_format($product->price, 2) }} ج.م</p>
+                        </div>
+                    </div>
 
+                    <div class="row">
+                        @if (Auth::user()->role === 'admin')
+                            <div class="col">
+                                <label class="lbl">🧾 التكلفة</label>
+                                <p class="value">{{ number_format($product->cost, 2) }} ج.م</p>
+                            </div>
+                        @endif
+                        <div class="col">
+                            <label class="lbl">
+                                {{ $product->is_produced ? '📋 الريسبي' : '📦 الكمية بالمخزون' }}
+                            </label>
 
+                            @if ($product->is_produced)
+                                <a href="#" class="recipe-btn" data-bs-toggle="modal"
+                                    data-bs-target="#editRecipeModal">
+                                    عرض الريسبي
+                                </a>
+                            @else
+                                <p class="value">{{ $product->quantity }}</p>
+                            @endif
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            {{-- حالة المنتج المهم --}}
+            <div class="section statuses">
+                <h3>⭐ حالة المنتج</h3>
+                <div class="box flex-grid">
+                    <div class="status-card">
+                        <label class="d-check">
+                            <input type="checkbox" {{ $importantProduct ? 'checked' : '' }} disabled>
+                            <span>منتج مهم</span>
+                        </label>
+
+                        @if ($importantProduct)
+                            <button class="btn small edit-important-btn" data-id="{{ $importantProduct->id }}"
+                                data-name="{{ $importantProduct->name }}"
+                                data-product="{{ $importantProduct->product->name ?? $product->name }}"
+                                data-product-id="{{ $importantProduct->product_id ?? $product->id }}">
+                                ✏️ تعديل المنتج المهم
+                            </button>
+                            <p class="small">مسجل كمنتج مهم باسم: <strong>{{ $importantProduct->name }}</strong></p>
+                        @else
+                            <p class="small muted">غير مسجل كمنتج مهم</p>
+                            <div class="actions">
+                                <form id="addImportantForm" method="POST"
+                                    action="{{ route('important_products.store') }}">
+                                    @csrf
+                                    <input type="hidden" name="product_id" value="{{ $product->id }}">
+                                    <input type="hidden" name="name" value="{{ $product->name }}">
+                                    <button type="submit" class="btn small success">➕ إضافة للمنتجات المهمة</button>
+                                </form>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            {{-- نظرة عامة --}}
             <div class="section">
+                <h3>📊 نظرة عامة</h3>
                 <div class="box">
                     <ul class="mini-list">
-                        <li><strong>تاريخ إضافة المنتج :</strong> {{ $product->created_at->format('Y-m-d H:i') }}</li>
-                        <li>
-                            <strong>آخر إضافة للمخزون:</strong>
-                            @php
-                                // جلب آخر سجل مخزون مضاف لهذا المنتج عبر التنوعات
-                                $lastStock = $product->variants->flatMap->stocks->sortByDesc('created_at')->first();
-                            @endphp
-
-                            @if ($lastStock)
-                                {{ $lastStock->created_at->format('Y-m-d H:i') }}
-                                <span style="font-size: 11px; color: #777;">
-                                    ({{ $lastStock->is_printed ? 'مطبوع' : 'سادة' }})
-                                </span>
-                            @else
-                                <span class="muted">لا يوجد مخزون مضاف بعد</span>
-                            @endif
-                        </li>
+                        <li><strong>تاريخ الإضافة:</strong> {{ $product->created_at->format('Y-m-d H:i') }}</li>
+                        <li><strong>آخر تعديل:</strong> {{ $product->updated_at->format('Y-m-d H:i') }}</li>
                     </ul>
                 </div>
             </div>
         </div>
     </div>
 
-
-
-
-    <!-- Add Quantity Modal -->
-    <div class="modal fade" id="addQtyModal" tabindex="-1">
+    {{-- 🟢 مودال تعديل المنتج --}}
+    <div class="modal fade" id="editProductModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-
+            <div class="modal-content modal-dark">
                 <div class="modal-header">
-                    <h5 class="modal-title">إضافة كمية</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title text-gold">✏️ تعديل المنتج</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
+                <div class="modal-body">
+                    <form id="updateProductForm" action="{{ route('products.update', $product->id) }}" method="POST">
 
-                <form method="POST" id="addQtyForm">
-                    @csrf
+                        @csrf
+                        @method('PUT')
 
-                    <div class="modal-body">
-                        <label class="form-label">الكمية</label>
-                        <input type="number" name="quantity" class="form-control" min="1" required>
-                    </div>
-                    <input type="hidden" name="is_printed" id="isPrinted">
-
-                    <div class="modal-footer">
-                        <button type="submit" class="btn btn-primary">
-                            حفظ
-                        </button>
-                    </div>
-
-                </form>
-
-            </div>
-        </div>
-    </div>
-    <!-- Add Color Modal -->
-    <div class="modal fade" id="addColorModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">➕ إضافة لون جديد</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <form method="POST" action="{{ route('variants.storeColor', $product->id) }}">
-                    @csrf
-
-                    <div class="modal-body">
-
-                        {{-- اللون --}}
                         <div class="mb-3">
-                            <label class="form-label">🎨 اللون</label>
-                            <select name="color_id" class="form-control" required>
-                                @foreach ($allColors as $color)
-                                    <option value="{{ $color->id }}">{{ $color->name }}</option>
-                                @endforeach
-                            </select>
+                            <label class="form-label text-gold">📦 الاسم</label>
+                            <input type="text" name="name" class="form-control dark-input"
+                                value="{{ $product->name }}" required>
                         </div>
 
-                        {{-- المقاسات --}}
-                        <label class="form-label">📐 المقاسات</label>
-
-                        @foreach ($allSizes as $size)
-                            <div class="d-flex align-items-center mb-2 gap-2">
-                                <input type="checkbox" name="sizes[{{ $size->id }}][enabled]">
-                                <span>{{ $size->name }}</span>
-
-                                <input type="number" name="sizes[{{ $size->id }}][quantity]" placeholder="الكمية"
-                                    min="0" class="form-control" style="width:120px">
+                        <div class="mb-3">
+                            <label class="form-label text-gold">💰 السعر</label>
+                            <input type="number" step="0.01" name="price" class="form-control dark-input"
+                                value="{{ $product->price }}" required>
+                        </div>
+                        @if (Auth::user()->role === 'admin')
+                            <div class="mb-3">
+                                <label class="form-label text-gold">🧾 التكلفة</label>
+                                <input type="number" step="0.01" name="cost" class="form-control dark-input"
+                                    value="{{ $product->cost }}" required>
                             </div>
-                        @endforeach
+                        @endif
+                        <div class="mb-3">
+                            <label class="form-label text-gold">📦 الكمية</label>
+                            <input type="number" name="quantity" class="form-control dark-input"
+                                value="{{ $product->quantity }}" required>
+                        </div>
 
-                    </div>
-
-                    <div class="modal-footer">
-                        <button type="submit" class="btn btn-primary">
-                            حفظ اللون
-                        </button>
-                    </div>
-                </form>
-
+                        <button type="submit" class="btn-submit w-100 mt-3">💾 حفظ التعديلات</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-<div class="modal fade" id="editProductNameModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">✏️ تعديل اسم المنتج</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form action="{{ route('products.updateName', $product->id) }}" method="POST">
-                @csrf
-                @method('PATCH')
+
+    {{-- 🟣 مودال تعديل المنتج المهم --}}
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modal-dark">
+                <div class="modal-header">
+                    <h5 class="modal-title text-gold">✏️ تعديل المنتج المهم</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">اسم المنتج الجديد</label>
-                        <input type="text" name="name" class="form-control" value="{{ $product->name }}" required>
-                    </div>
+                    <form id="editForm" method="POST" action="">
+                        @csrf
+                        @method('PUT')
+
+                        <div class="mb-3">
+                            <label class="form-label text-gold">اسم التعريف</label>
+                            <input type="text" name="name" id="editName" class="form-control dark-input"
+                                required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label text-gold">المنتج المرتبط</label>
+                            <input type="hidden" name="product_id" id="editProductId">
+                            <p class="small text-muted">المنتج الحالي: <span id="editSelectedProductText"></span></p>
+                        </div>
+
+                        <button type="submit" class="btn-submit w-100 mt-2">💾 حفظ التعديلات</button>
+                    </form>
                 </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">تحديث الاسم</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
-</div>
+    @if ($product->is_produced)
+        <div class="modal fade animate__animated animate__fadeInDown" id="editRecipeModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content rounded-4 shadow"
+                    style="background: var(--card-surface); color: var(--text-bright);">
 
-<script>
-    function openEditProductNameModal() {
-        new bootstrap.Modal(document.getElementById('editProductNameModal')).show();
-    }
-</script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+                    <div class="modal-header bg-warning text-dark rounded-top-4">
+                        <h5 class="modal-title">📋 تعديل ريسبي المنتج</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
 
+                    <form action="{{ route('products.updateRecipe', $product->id) }}" method="POST" id="recipeForm">
+                        @csrf
+                        @method('PUT')
+
+                        <div class="modal-body">
+                            <div id="editIngredientsList">
+                                @if ($product->ingredients->isEmpty())
+                                    <div class="row g-2 mb-2 ingredient-row">
+                                        <div class="col-md-5">
+                                            <select name="ingredients[]" class="form-control">
+                                                <option value="">اختر الخامة...</option>
+                                                @foreach ($ingredients as $item)
+                                                    <option value="{{ $item->id }}">{{ $item->name }}
+                                                        ({{ $item->unit->symbol }})
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <input type="number" step="0.001" name="amounts[]" value=""
+                                                class="form-control">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button"
+                                                class="btn btn-outline-danger w-100 removeEditRow">🗑️</button>
+                                        </div>
+                                    </div>
+                                @else
+                                    @foreach ($product->ingredients as $ing)
+                                        <div class="row g-2 mb-2 ingredient-row">
+                                            <div class="col-md-5">
+                                                <select name="ingredients[]" class="form-control">
+                                                    <option value="">اختر الخامة...</option>
+                                                    @foreach ($ingredients as $item)
+                                                        <option value="{{ $item->id }}"
+                                                            {{ $item->id == $ing->id ? 'selected' : '' }}>
+                                                            {{ $item->name }} ({{ $item->unit->symbol }})
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <input type="number" step="0.001" name="amounts[]"
+                                                    value="{{ $ing->pivot->amount }}" class="form-control">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <button type="button"
+                                                    class="btn btn-outline-danger w-100 removeEditRow">🗑️</button>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                @endif
+                            </div>
+
+
+                            <button type="button" id="addEditIngredientBtn" class="btn btn-sm btn-outline-warning mt-2">
+                                + إضافة خامة
+                            </button>
+
+                        </div>
+
+                        <div class="modal-footer border-0">
+                            <button type="submit" class="btn-icon btn-edit w-100"
+                                style="background: var(--primary-gold); color:#000;">
+                                ✅ إتمام التعديل
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
+@endsection
+
+@section('scripts')
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // وظيفة عامة لفتح أي مودال بسلاسة بدون تظليل
-        function openModal(modalId) {
-            const modalEl = document.getElementById(modalId);
+        console.log("Script Loaded");
 
-            // إزالة أي fade قديم
-            modalEl.querySelector('.modal-dialog').classList.remove('animate__fadeInUp');
+        document.addEventListener("DOMContentLoaded", function() {
+            console.log("DOM Ready");
 
-            // إضافة Fade animation
-            modalEl.querySelector('.modal-dialog').classList.add('animate__animated', 'animate__fadeInUp');
+            const list = document.getElementById("editIngredientsList");
+            const addBtn = document.getElementById("addEditIngredientBtn");
 
-            // تفعيل المودال بدون backdrop مظلل
-            const modal = new bootstrap.Modal(modalEl, {
-                backdrop: false,
-                keyboard: true
+            console.log("List:", list);
+            console.log("Button:", addBtn);
+        });
+
+        document.addEventListener("click", function(e) {
+
+            // ➕ إضافة خامة
+            if (e.target && e.target.id === "addEditIngredientBtn") {
+
+                console.log("Add button clicked");
+
+                const list = document.getElementById("editIngredientsList");
+
+                if (!list) {
+                    console.log("List not found");
+                    return;
+                }
+
+                const firstRow = list.querySelector(".ingredient-row");
+                if (!firstRow) {
+                    console.log("No rows found");
+                    return;
+                }
+
+                const newRow = firstRow.cloneNode(true);
+
+                newRow.querySelector("select").value = "";
+                newRow.querySelector("input").value = "";
+
+                list.appendChild(newRow);
+            }
+
+            // ❌ حذف خامة
+            // ❌ حذف خامة
+            if (e.target.closest(".removeEditRow")) {
+
+                console.log("Remove clicked");
+
+                const list = document.getElementById("editIngredientsList");
+                const row = e.target.closest(".ingredient-row");
+
+                // احفظ نسخة من الصف الجديد الفارغ
+                const newRow = row.cloneNode(true);
+                newRow.querySelector("select").value = "";
+                newRow.querySelector("input").value = "";
+
+                // امسح الصف الحالي
+                row.remove();
+
+                // أضف صف جديد فارغ بدل الصف المحذوف
+                list.appendChild(newRow);
+            }
+
+
+        });
+    </script>
+    <script>
+        $(function() {
+
+            // 🔹 فتح مودال تعديل المنتج
+            $('#openEditModal').on('click', function(e) {
+                e.preventDefault();
+                $('#editProductModal').modal('show');
             });
 
-            modal.show();
-        }
 
-        // فتح مودال تعديل المنتج
-        $('#openEditModal').on('click', function(e) {
-            e.preventDefault();
-            $('#edit_name').val(`{{ $product->name }}`);
-            $('#edit_price').val(`{{ $product->price }}`);
-            $('#edit_cost').val(`{{ $product->cost }}`);
-            $('#edit_quantity').val(`{{ $product->quantity }}`);
 
-            openModal('editProductModal');
+            // 🔹 إضافة منتج مهم
+            $('#addImportantForm').on('submit', function(e) {
+                e.preventDefault();
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: $(this).serialize(),
+                    success: function() {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تمت الإضافة!',
+                            timer: 1200,
+                            showConfirmButton: false
+                        });
+                        setTimeout(() => location.reload(), 1300);
+                    },
+                    error: function(xhr) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'خطأ!',
+                            text: xhr.responseJSON?.message || 'تعذر الإضافة'
+                        });
+                    }
+                });
+            });
+
+            // 🔹 فتح مودال تعديل المنتج المهم
+            $(document).on('click', '.edit-important-btn', function() {
+                $('#editName').val($(this).data('name'));
+                $('#editProductId').val($(this).data('product-id'));
+                $('#editSelectedProductText').text($(this).data('product'));
+                $('#editForm').attr('action', `/important-products/${$(this).data('id')}`);
+                $('#editModal').modal('show');
+            });
+
+            // 🔹 حفظ تعديل المنتج المهم
+            $('#editForm').on('submit', function(e) {
+                e.preventDefault();
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: $(this).serialize(),
+                    success: function() {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تم التعديل!',
+                            timer: 1200,
+                            showConfirmButton: false
+                        });
+                        $('#editModal').modal('hide');
+                        setTimeout(() => location.reload(), 1300);
+                    },
+                    error: function() {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'فشل التعديل',
+                            text: 'حاول مرة أخرى'
+                        });
+                    }
+                });
+            });
         });
-
-        // فتح مودال إضافة كمية
-        function openAddQty(variantId) {
-            const form = document.getElementById('addQtyForm');
-            form.action = `/variants/${variantId}/add-quantity`;
-            openModal('addQtyModal');
-        }
-
-        // فتح مودال إضافة لون
-        function openAddColorModal() {
-            openModal('addColorModal');
-        }
-
-        // فتح مودال تعديل المنتج المهم
-        $(document).on('click', '.edit-important-btn', function() {
-            const id = $(this).data('id');
-            const name = $(this).data('name');
-            const productName = $(this).data('product');
-            const productId = $(this).data('product-id');
-
-            $('#editName').val(name);
-            $('#editSelectedProductText').text(productName);
-            $('#editSelectedProduct').show();
-            $('#editProductId').val(productId);
-
-            $('#editForm').attr('action', `/important-products/${id}`);
-            openModal('editModal');
-        });
     </script>
-
-
-    <script>
-        function toggleSizes(colorId) {
-            const box = document.getElementById(`sizes-${colorId}`);
-            const icon = box.previousElementSibling.querySelector('.toggle-icon');
-
-            if (box.classList.contains('d-none')) {
-                box.classList.remove('d-none');
-                icon.style.transform = 'rotate(180deg)';
-            } else {
-                box.classList.add('d-none');
-                icon.style.transform = 'rotate(0deg)';
-            }
-        }
-    </script>
-    <script>
-        function openAddQty(variantId) {
-            const form = document.getElementById('addQtyForm');
-
-            form.action = `/variants/${variantId}/add-quantity`;
-
-            const modal = new bootstrap.Modal(
-                document.getElementById('addQtyModal')
-            );
-
-            modal.show();
-        }
-
-        function openAddStock(variantId, isPrinted) {
-            const form = document.getElementById('addQtyForm');
-            form.action = `/variants/${variantId}/add-stock`;
-
-            document.getElementById('isPrinted').value = isPrinted;
-
-            new bootstrap.Modal(
-                document.getElementById('addQtyModal')
-            ).show();
-        }
-    </script>
-    <script>
-        function openAddColorModal() {
-            const modal = new bootstrap.Modal(
-                document.getElementById('addColorModal')
-            );
-            modal.show();
-        }
-    </script>
-
 
 @endsection
 
 @section('style')
     <style>
-        <style> :root {
-            --primary-color: #515831;
-            --secondary-color: #79c879;
-            --text-dark: #2d3436;
-            --bg-light: #f8f9fa;
-            --border-radius: 16px;
-        }
-
-        .main-product-card {
-            background: #fff;
-            border-radius: var(--border-radius);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-            border: 1px solid #eee;
-        }
-
-        /* Header Section */
-        .product-header-section {
-            background: linear-gradient(135deg, #515831 0%, #3a4124 100%);
-            padding: 30px;
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .category-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.8;
-        }
-
-        .product-title {
-            font-size: 28px;
-            margin: 5px 0;
-            font-weight: 800;
-        }
-
-        .product-meta {
-            display: flex;
-            gap: 15px;
-            font-size: 14px;
-            opacity: 0.7;
-        }
-
-        /* Variants Section */
-        .variants-section {
-            padding: 25px;
-        }
-
-        .section-title-wrapper {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        /* Color Groups */
-        .color-group {
-            border: 1px solid #eee;
-            border-radius: 12px;
-            margin-bottom: 15px;
-            overflow: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .color-header {
-            background: #fdfdfd;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .color-header:hover {
-            background: #f1f3f0;
-        }
-
-        .color-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .color-dot {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-        }
-
-        .color-name {
-            font-weight: 700;
-            font-size: 18px;
-            color: var(--text-dark);
-        }
-
-        .total-qty {
-            background: #e9ecef;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        /* Sizes Table */
-        .sizes-container {
-            padding: 0 20px 20px;
-            background: #fff;
-        }
-
-        .sizes-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0 8px;
-        }
-
-        .sizes-table th {
-            color: #888;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 10px;
-            text-align: right;
-        }
-
-        .sizes-table td {
-            background: #fcfcfc;
-            padding: 12px;
-            border-top: 1px solid #f1f1f1;
-            border-bottom: 1px solid #f1f1f1;
-        }
-
-        .sizes-table td:first-child {
-            border-right: 1px solid #f1f1f1;
-            border-radius: 0 10px 10px 0;
-        }
-
-        .sizes-table td:last-child {
-            border-left: 1px solid #f1f1f1;
-            border-radius: 10px 0 0 10px;
-        }
-
-        /* Stock Control Logic */
-        .stock-control {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .qty-count {
-            font-family: 'Courier New', monospace;
-            font-weight: 700;
-            font-size: 16px;
-            min-width: 30px;
-        }
-
-        .qty-badge.total {
-            background: #51583120;
-            color: #515831;
-            padding: 2px 8px;
-            border-radius: 6px;
-        }
-
-        .plus-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 8px;
-            border: none;
-            background: var(--secondary-color);
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s;
-        }
-
-        .plus-btn.plain {
-            background: #6c757d;
-        }
-
-        .plus-btn:hover {
-            transform: scale(1.1);
-        }
-
-        /* Buttons */
-        .btn-modern {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 700;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        .btn-modern.edit {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .btn-modern.edit:hover {
-            background: white;
-            color: var(--primary-color);
-        }
-
-        .btn-modern.success {
-            background: var(--secondary-color);
-            color: white;
-        }
-
-        .d-none {
-            display: none;
-        }
-    </style>
-
-    <style>
-        :root {
-            --primary: #515831;
-            --printed-color: #28a745;
-            /* أخضر للمطبوع */
-            --plain-color: #495057;
-            /* رمادي داكن للسادة */
-            --bg-light: #f8f9fa;
-        }
-
-        .product-container {
-            max-width: 1000px;
-            margin: 20px auto;
-            font-family: 'Cairo', sans-serif;
-        }
-
-        .main-product-card {
-            background: #fff;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-        }
-
-        /* Header */
-        .product-header-section {
-            background: var(--primary);
-            padding: 25px;
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .product-title {
-            font-size: 24px;
-            margin: 0;
-            font-weight: 700;
-        }
-
-        /* Table Styling */
-        .variants-section {
-            padding: 20px;
-        }
-
-        .sizes-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-
-        .sizes-table th {
-            padding: 12px;
-            color: #777;
-            font-size: 14px;
-            text-align: center;
-            border-bottom: 2px solid #eee;
-        }
-
-        .sizes-table td {
-            padding: 15px;
-            text-align: center;
-            border-bottom: 1px solid #f1f1f1;
-        }
-
-        /* Stock Actions */
-        .stock-action-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .qty-num {
-            font-size: 18px;
-            font-weight: 800;
-        }
-
-        .printed-text {
-            color: var(--printed-color);
-        }
-
-        .plain-text {
-            color: var(--plain-color);
-        }
-
-        /* الأزرار الجديدة */
-        .btn-add-stock {
-            border: none;
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            color: white;
-            min-width: 110px;
-            justify-content: center;
-        }
-
-        /* زر المطبوع (أخضر) */
-        .btn-add-stock.printed {
-            background-color: var(--printed-color);
-            box-shadow: 0 3px 8px rgba(40, 167, 69, 0.2);
-        }
-
-        .btn-add-stock.printed:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-        }
-
-        /* زر السادة/غير المطبوع (رمادي احترافي) */
-        .btn-add-stock.plain {
-            background-color: var(--plain-color);
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .btn-add-stock.plain:hover {
-            background-color: #343a40;
-            transform: translateY(-2px);
-        }
-
-        .qty-badge.total {
-            background: #eee;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-weight: bold;
-        }
-
-        /* Utility */
-        .d-none {
-            display: none;
-        }
-
-        .color-group {
-            border: 1px solid #eee;
-            border-radius: 12px;
-            margin-bottom: 15px;
-        }
-
-        .color-header {
-            background: #fdfdfd;
-            padding: 15px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-        }
-    </style>
-    <style>
         body {
-            background: #fafafa;
+            background: #0f0f11;
             font-family: "Cairo", sans-serif;
+            color: #f5f5f5;
         }
 
         .product-container {
-            max-width: 960px;
-            margin: 40px auto;
+            max-width: 900px;
+            margin: 60px auto;
             padding: 20px;
-            position: relative;
         }
 
         .card {
-            background: #fff;
-            border-radius: 20px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
-            padding: 26px;
-        }
-
-        .card.fade-in {
-            animation: fadeInUp 0.6s ease;
+            background: linear-gradient(145deg, #1b1b1f, #1a1a1c);
+            border-radius: 22px;
+            padding: 28px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 215, 0, 0.05);
         }
 
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #f1f1f1;
-            margin-bottom: 16px;
-            padding-bottom: 10px;
-        }
-
-        .card-header h2 {
-            font-size: 24px;
-            color: #2b2b2b;
-            margin: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 14px;
         }
 
         .badge {
-            background: #515831;
+            background: linear-gradient(135deg, #b78d2a, #d4af37);
             color: #fff;
-            padding: 6px 12px;
-            border-radius: 30px;
+            padding: 6px 14px;
+            border-radius: 50px;
             font-weight: bold;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
         }
 
-        .modal-dialog {
-            border-radius: 16px;
-            transition: transform 0.3s ease, opacity 0.3s ease;
+        .edit-btn {
+            background: linear-gradient(135deg, #d4af37, #b78d2a);
+            color: #111;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-weight: 700;
+            text-decoration: none;
         }
 
-        .modal-backdrop {
-            display: none;
-            /* إزالة التظليل */
+        .edit-btn:hover {
+            background: linear-gradient(135deg, #ffd75f, #d4af37);
         }
 
         .section h3 {
-            color: #515831;
-            font-size: 20px;
+            color: #d4af37;
+            font-size: 19px;
             margin-bottom: 10px;
+            font-weight: 600;
         }
 
         .box {
-            background: #fafafa;
-            padding: 14px 18px;
-            border-radius: 12px;
-            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
-            margin-bottom: 18px;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-
-        .row {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 10px;
-        }
-
-        .col {
-            flex: 1;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 20px;
         }
 
         .lbl {
-            display: block;
             font-weight: 600;
-            color: #555;
+            color: #bbb;
+            font-size: 14px;
         }
 
         .value {
-            font-size: 17px;
+            font-size: 18px;
             font-weight: 700;
-            color: #222;
+            color: #f5f5f5;
         }
 
-        .flex-grid {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            gap: 14px;
-        }
-
-        .status-card {
-            background: #fff;
-            padding: 16px;
-            border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .d-check {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-        }
-
-        .d-check input {
-            transform: scale(1.2);
-        }
-
-        .actions {
-            margin-top: 6px;
+        .value.gold {
+            color: #d4af37;
         }
 
         .btn.small {
-            background: #515831;
-            color: #fff;
-            padding: 8px 12px;
+            background: linear-gradient(135deg, #d4af37, #b78d2a);
+            color: #111;
+            padding: 7px 14px;
             border-radius: 10px;
-            text-decoration: none;
             font-weight: 700;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-            transition: all .18s ease;
-        }
-
-        .btn.small:hover {
-            transform: translateY(-3px);
-            background: #515831;
         }
 
         .btn.small.success {
-            background: #79c879;
+            background: linear-gradient(135deg, #2e7d32, #4caf50);
+            color: #fff;
         }
 
-        .muted {
-            color: #888;
+        .modal-dark {
+            background: #1b1b1f;
+            border-radius: 20px;
+            color: #fff;
+            border: 1px solid rgba(255, 215, 0, 0.1);
         }
 
-        .mini-list {
-            list-style: none;
-            padding-left: 0;
-            margin: 0;
-            color: #333;
+        .dark-input {
+            background: #141416;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 10px;
         }
 
-        .mini-list li {
-            margin-bottom: 8px;
+        .dark-input:focus {
+            border-color: #d4af37;
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #d4af37, #b78d2a);
+            border: none;
+            padding: 12px;
+            border-radius: 12px;
+            color: #111;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: .25s;
+        }
+
+        .btn-submit:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+        }
+
+        .fade-in {
+            animation: fadeInUp .6s ease;
         }
 
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(15px);
             }
 
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+
+        .modal-dark {
+            background: #111115 !important;
+            color: #f5f5f5 !important;
+            border-radius: 22px;
+            border: 1px solid rgba(212, 175, 55, 0.12);
+            /* جولد خفيف */
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+        }
+
+        /* الهيدر */
+        .modal-dark .modal-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .modal-dark .modal-title {
+            color: #d4af37 !important;
+            font-weight: 700;
+        }
+
+        /* زر الإغلاق */
+        .modal-dark .btn-close-white {
+            filter: brightness(0) invert(1);
+            opacity: 0.8;
+        }
+
+        .modal-dark .btn-close-white:hover {
+            opacity: 1;
+        }
+
+        /* المحتوى الداخلي */
+        .modal-dark .modal-body {
+            color: #f5f5f5 !important;
+        }
+
+        /* الليبلز */
+        .modal-dark .form-label {
+            color: #d4af37;
+            font-weight: 600;
+        }
+
+        /* الانبوت الداكن */
+        .dark-input {
+            background: #141416 !important;
+            border: 1px solid #333 !important;
+            color: #fff !important;
+            border-radius: 10px;
+        }
+
+        .dark-input:focus {
+            border-color: #d4af37 !important;
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.3) !important;
+        }
+
+        /* الأزرار */
+        .btn-submit {
+            background: linear-gradient(135deg, #d4af37, #b78d2a) !important;
+            border: none !important;
+            color: #111 !important;
+            font-weight: bold;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 12px;
+            transition: .25s;
+        }
+
+        .btn-submit:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+        }
+
+        .recipe-btn {
+            background: #ffb84d;
+            color: #1a1a1a;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: 0.2s;
+            display: inline-block;
+        }
+
+        .recipe-btn:hover {
+            background: #ffd97a;
+            transform: scale(1.05);
+        }
+
+        .form-control {
+            background: #121212 !important;
+            border: 1px solid #333 !important;
+            color: white !important;
         }
     </style>
 @endsection

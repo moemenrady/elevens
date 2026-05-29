@@ -1,5 +1,5 @@
 @extends('layouts.app_page')
-@section('title', 'المبيعات')
+@section('title', 'إدارة الفواتير')
 
 @section('content')
     @if (session('success'))
@@ -20,26 +20,28 @@
 
     <div class="page-container">
 
-        {{-- عنوان الصفحة --}}
+        {{-- صفحة عنوان --}}
     @section('page_title')
-        <h1 class="title"> المبيعات</h1>
+        <h1 class="title">إدارة الفواتير</h1>
     @endsection
-
-    {{-- إجمالي المبيعات --}}
-    <div id="totalSales"
-        style="
-        margin-bottom: 15px;
-        font-size: 20px;
-        font-weight: bold;
-        color: #198754;
-    ">
-        إجمالي المبيعات: 0 ج
-    </div>
 
     {{-- صندوق البحث --}}
     <div class="search-box" style="margin-bottom:15px;">
-        <input type="text" id="invoiceSearch" placeholder="ابحث عن فاتورة" style="width:100%; padding:8px;"
+        <input type="text" id="invoiceSearch" placeholder="ابحث بالعميل أو رقم الفاتورة" style="width:100%; padding:8px;"
             value="{{ request('search') ?? '' }}">
+    </div>
+
+    {{-- فلتر النوع --}}
+    <div class="filters" style="margin-bottom:15px; display:flex; flex-wrap:wrap; gap:12px;">
+        @php
+            $types = ['product', 'subscription', 'booking', 'session', 'deposit', 'mixed'];
+        @endphp
+        @foreach ($types as $type)
+            <label style="display:flex; align-items:center; gap:4px;">
+                <input type="checkbox" class="filter-type" value="{{ $type }}">
+                <span>{{ $type }}</span>
+            </label>
+        @endforeach
     </div>
 
     {{-- فلتر التاريخ --}}
@@ -49,12 +51,9 @@
     </div>
 
     {{-- قائمة الفواتير --}}
-    <div class="invoice-list" id="invoiceList">
-        <p class="text-center p-3">⏳ جاري التحميل...</p>
-    </div>
+    <div class="invoice-list" id="invoiceList"></div>
 
 </div>
-
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
@@ -68,7 +67,6 @@
         const searchRoute = @json(route('invoices.ajaxSearch'));
         const showRoute = @json(route('invoices.client.show', ':id'));
 
-        // دالة منع الاستدعاء السريع (debounce)
         function debounce(fn, delay = 300) {
             let t;
             return function(...args) {
@@ -77,7 +75,6 @@
             };
         }
 
-        // دالة حماية النصوص من HTML injection
         function safeText(s) {
             return String(s ?? '').replace(/[&<>"]/g, function(c) {
                 return {
@@ -89,7 +86,6 @@
             });
         }
 
-        // دالة إنشاء كارد الفاتورة
         function renderInvoiceCard(inv) {
             const client = safeText(inv.client_name ?? 'عميل غير معروف');
             const number = safeText(inv.invoice_number);
@@ -98,268 +94,288 @@
             const date = inv.updated_at ? new Date(inv.updated_at).toLocaleDateString() : '-';
             const url = showRoute.replace(':id', inv.id);
 
-            return `
-        <div class="session-card" role="button" onclick="window.location.href='${url}'">
-            <div class="info" style="text-align:right;">
-                <h3>#${number}</h3>
-                <p>التاريخ: ${date}</p>
-            </div>
-            <div class="persons">
-                <div class="total-amount">الإجمالي: ${total} ج</div>
-            </div>
-        </div>
+            let timeHtml = '';
+
+            if ((type === 'session' || type === 'booking') && inv.start_time && inv.end_time) {
+                const start = new Date(inv.start_time).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+
+                const end = new Date(inv.end_time).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                timeHtml = `
+            <p>🟢 من: ${start}</p>
+            <p>🔴 إلى: ${end}</p>
         `;
+            }
+
+            return `
+    <div class="session-card" role="button" onclick="window.location.href='${url}'">
+        <div class="info" style="text-align:right;">
+            <h3>#${number}</h3>
+            <p>العميل: ${client}</p>
+            <p>النوع: ${type}</p>
+            <p>التاريخ: ${date}</p>
+            ${timeHtml}
+        </div>
+        <div class="persons">
+            <div class="total-amount">الإجمالي: ${total} ج</div>
+        </div>
+    </div>
+    `;
         }
 
-        // عرض حالة التحميل
         function showLoading() {
-            invoiceList.innerHTML = `<p class="text-center p-3">⏳ جاري التحميل...</p>`;
-            document.getElementById('totalSales').textContent = `إجمالي المبيعات: 0 ج`;
+            invoiceList.innerHTML = `
+        <div class="loader">⏳ جاري التحميل...</div>
+    `;
         }
 
-        // عرض لا توجد نتائج
         function showNoResults() {
             invoiceList.innerHTML = `<p class="no-results">❌ لا توجد فواتير</p>`;
-            document.getElementById('totalSales').textContent = `إجمالي المبيعات: 0 ج`;
         }
 
-    
+        let offset = 0;
+        let loading = false;
+        let hasMore = true;
 
+        async function fetchInvoices(reset = false) {
 
-        // جلب وعرض الفواتير
-        async function fetchInvoices() {
-            const q = searchInput.value.trim();
-            const types = Array.from(typeCheckboxes).filter(c => c.checked).map(c => c.value);
-            const from = fromDate.value;
-            const to = toDate.value;
+            if (loading) return;
+            loading = true;
 
-            showLoading();
+            if (reset) {
+                offset = 0;
+                hasMore = true;
+                showLoading(); // 👈 هنا
+            }
+
+            if (!hasMore) {
+                loading = false;
+                return;
+            }
+
             try {
                 const url = new URL(searchRoute, location.origin);
+
+                const q = searchInput.value.trim();
+                const types = Array.from(typeCheckboxes).filter(c => c.checked).map(c => c.value);
+                const from = fromDate.value;
+                const to = toDate.value;
+
                 if (q) url.searchParams.append('q', q);
-                if (types.length > 0) url.searchParams.append('types', types.join(','));
+                if (types.length) url.searchParams.append('types', types.join(','));
                 if (from) url.searchParams.append('from', from);
                 if (to) url.searchParams.append('to', to);
 
-                const res = await fetch(url.toString(), {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                if (!res.ok) throw new Error('Network response was not ok');
+                url.searchParams.append('offset', offset);
+
+                showBottomLoader();
+
+                const res = await fetch(url);
                 const data = await res.json();
-                const items = Array.isArray(data) ? data : (data.data ?? data.items ?? data);
 
-                if (!items || items.length === 0) {
-                    showNoResults();
-                    return;
-                }
-
-                invoiceList.innerHTML = '';
-                items.forEach(i => invoiceList.innerHTML += renderInvoiceCard(i));
+                let html = '';
+                data.data.forEach(i => {
+                    html += renderInvoiceCard(i);
+                });
+                invoiceList.insertAdjacentHTML('beforeend', html);
 
 
-                // استخدم هذا السطر:
-                const totalSalesAmount = items.reduce((sum, inv) => sum + parseFloat(inv.total ?? 0), 0);
-                document.getElementById('totalSales').textContent =
-                    `إجمالي المبيعات: ${totalSalesAmount.toFixed(2)} ج`;
 
-            } catch (err) {
-                console.error(err);
-                invoiceList.innerHTML = `<p class="no-results">حدث خطأ أثناء جلب الفواتير</p>`;
-                document.getElementById('totalSales').textContent = `إجمالي المبيعات: 0 ج`;
+                offset += 50;
+                hasMore = data.hasMore;
+
+                removeBottomLoader();
+
+            } catch (e) {
+                console.error(e);
+            }
+
+            loading = false;
+        }
+
+        function showBottomLoader() {
+            if (!document.getElementById('loader')) {
+                invoiceList.insertAdjacentHTML('beforeend',
+                    `<div id="loader" class="loader">⏳ جاري تحميل المزيد...</div>`
+                );
             }
         }
 
-        // ربط الأحداث
-        const debouncedFetch = debounce(fetchInvoices, 250);
-        searchInput.addEventListener('input', debouncedFetch);
-        typeCheckboxes.forEach(cb => cb.addEventListener('change', fetchInvoices));
-        fromDate.addEventListener('change', fetchInvoices);
-        toDate.addEventListener('change', fetchInvoices);
+        function removeBottomLoader() {
+            document.getElementById('loader')?.remove();
+        }
+        // دالة تعرض Snackbar بقائمة العملاء وعدد فواتيرهم
+        function showClientsSnackbar(invoices) {
+            // احسب عدد الفواتير لكل عميل
+            const clientCounts = {};
+            invoices.forEach(inv => {
+                const name = inv.client_name || 'عميل غير معروف';
+                clientCounts[name] = (clientCounts[name] || 0) + 1;
+            });
 
-        // استدعاء أولي لجلب الفواتير
+            // لو مفيش عملاء واضحين مفيش داعي للسناكبار
+            const entries = Object.entries(clientCounts);
+            if (entries.length === 0) {
+                hideClientsSnackbar();
+                return;
+            }
+
+            // احذف أي Snackbar سابق
+            $('#clientsSnackbar').remove();
+
+            // أنشئ قائمة صغيرة بالعملاء وعدد الفواتير
+            const listHtml = entries.map(([name, count]) => `
+        <li style="padding:4px 0; border-bottom:1px solid #eee;">
+            <strong>${name}</strong> = ${count}
+        </li>
+    `).join('');
+
+            // أنشئ الـ Snackbar
+            const $snackbar = $(`
+        <div id="clientsSnackbar" style="
+            position:fixed;
+            bottom:15px;
+            left:50%;
+            transform:translateX(-50%);
+            background:#333;
+            color:#fff;
+            padding:12px 16px;
+            border-radius:10px;
+            z-index:9999;
+            box-shadow:0 2px 10px rgba(0,0,0,0.25);
+            max-width:320px;
+            text-align:right;
+        ">
+            <div style="font-weight:bold; margin-bottom:6px;">📋 العملاء اللي ليهم فواتير:</div>
+            <ul style="list-style:none; margin:0; padding:0; max-height:140px; overflow:auto;">
+                ${listHtml}
+            </ul>
+        </div>
+    `);
+
+            $('body').append($snackbar);
+
+            // يختفي بعد 8 ثواني
+            setTimeout(() => hideClientsSnackbar(), 8000);
+        }
+
+        // دالة لإخفاء Snackbar لو موجود
+        function hideClientsSnackbar() {
+            $('#clientsSnackbar').fadeOut(300, function() {
+                $(this).remove();
+            });
+        }
+
+
+        const debouncedFetch = debounce(() => fetchInvoices(true), 300);
+
+        searchInput.addEventListener('input', debouncedFetch);
+        typeCheckboxes.forEach(cb => cb.addEventListener('change', () => fetchInvoices(true)));
+        fromDate.addEventListener('change', () => fetchInvoices(true));
+        toDate.addEventListener('change', () => fetchInvoices(true));
         fetchInvoices();
+        window.addEventListener('scroll', () => {
+            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+                fetchInvoices();
+            }
+        });
     });
 </script>
+
 @endsection
 @section('style')
 <style>
-:root {
-    --prime: #ddcdbc;
-    --prime-soft: #e6ddd4;
-    --bg: #515831;
-    --bg-dark: #3f4526;
-    --white: #ffffff;
-}
+    :root {
+        --theme-primary: #d9b2ad;
+        --accent-2: #ffe8ee;
+        --btn-bg: #ffe483;
+        --btn-bg-hover: #ffec9e;
+        --btn-border: #f2d35e;
+        --btn-text: #111;
+    }
 
-/* الخلفية العامة */
-body {
-    background: linear-gradient(-45deg, var(--bg), var(--bg-dark), var(--bg));
-    background-size: 400% 400%;
-    animation: gradientMove 14s ease infinite;
-    color: var(--white);
-    font-family: system-ui, sans-serif;
-}
+    body {
+        font-family: "Cairo", sans-serif;
+        background: #faf7f9;
+        color: #222;
+        margin: 0;
+    }
 
-@keyframes gradientMove {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
+    .page-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 18px;
+    }
 
-/* الحاوية */
-.page-container {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 18px;
-}
+    .filters label {
+        cursor: pointer;
+        font-size: 14px;
+    }
 
-/* عنوان الصفحة */
-.title {
-    font-size: 28px;
-    font-weight: 900;
-    color: var(--prime);
-    margin-bottom: 20px;
-}
+    .date-filters input {
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
 
-/* إجمالي المبيعات */
-#totalSales {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--prime-soft);
-    margin-bottom: 15px;
-}
+    .session-card {
+        background: #fff;
+        border: 1px solid #f3e7ea;
+        border-radius: 16px;
+        padding: 16px 18px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.25s ease-in-out;
+        box-shadow: 0 2px 6px rgba(217, 178, 173, 0.1);
+    }
 
-/* صندوق البحث */
-.search-box input {
-    width: 100%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    border: none;
-    outline: none;
-    font-size: 16px;
-    background: rgba(221, 205, 188, 0.15);
-    color: var(--white);
-}
+    .session-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 10px rgba(217, 178, 173, 0.25);
+    }
 
-/* لون Placeholder واضح */
-.search-box input::placeholder {
-    color: var(--prime);
-    opacity: 1; /* لضمان وضوح اللون */
-}
+    .session-card .info h3 {
+        font-size: 18px;
+        color: #222;
+        margin-bottom: 6px;
+    }
 
+    .session-card .info p {
+        margin: 2px 0;
+        color: #555;
+        font-size: 14px;
+    }
 
-/* فلتر التاريخ */
-.date-filters input {
-    padding: 8px 12px;
-    border-radius: 12px;
-    border: none;
-    background: rgba(221, 205, 188, 0.15);
-    color: var(--white);
-    font-size: 14px;
-}
+    .session-card .persons {
+        text-align: center;
+    }
 
-/* كارد الفاتورة */
-.session-card {
-    background: rgba(221, 205, 188, 0.15);
-    border-radius: 16px;
-    padding: 16px 18px;
-    margin-bottom: 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.3s ease;
-    box-shadow: 0 8px 24px rgba(0,0,0,.25);
-}
+    .session-card .total-amount {
+        font-size: 18px;
+        font-weight: bold;
+        color: #198754;
+        /* أخضر لطيف */
+        background: #e8f8ec;
+        padding: 8px 14px;
+        border-radius: 10px;
+        border: 1px solid #c9ebd1;
+        display: inline-block;
+    }
 
-.session-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 28px rgba(0,0,0,.35);
-}
-
-.session-card .info h3 {
-    font-size: 18px;
-    font-weight: 900;
-    color: var(--prime);
-    margin-bottom: 6px;
-}
-
-.session-card .info p {
-    margin: 2px 0;
-    color: var(--prime-soft);
-    font-size: 14px;
-}
-
-/* الإجمالي */
-.session-card .total-amount {
-    font-size: 18px;
-    font-weight: 800;
-    color: var(--bg);
-    background: linear-gradient(135deg, var(--prime), var(--prime-soft));
-    padding: 8px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--prime);
-    display: inline-block;
-    text-align: center;
-}
-
-/* Snackbar العملاء */
-#clientsSnackbar {
-    background: rgba(221, 205, 188, 0.95);
-    color: var(--bg);
-    border-radius: 18px;
-    padding: 14px 18px;
-    box-shadow: 0 20px 40px rgba(0,0,0,.25);
-    position: fixed;
-    bottom: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: 320px;
-    z-index: 9999;
-    text-align: right;
-}
-
-#clientsSnackbar ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-height: 140px;
-    overflow-y: auto;
-}
-
-#clientsSnackbar li {
-    padding: 4px 0;
-    border-bottom: 1px solid rgba(221, 205, 188, 0.5);
-}
-
-/* نص التحميل وعدم وجود فواتير */
-.text-center, .no-results {
-    font-weight: 700;
-    color: var(--prime-soft);
-    padding: 12px 0;
-    text-align: center;
-}
-
-/* التأثير عند تمرير الماوس على الفلاتر */
-.date-filters input:hover,
-.search-box input:hover {
-    background: rgba(221, 205, 188, 0.25);
-    cursor: pointer;
-}
-
-/* Scrollbar للكارد */
-.session-card .persons {
-    text-align: center;
-}
-
-/* Scrollbar داخل Snackbar */
-#clientsSnackbar ul::-webkit-scrollbar {
-    width: 6px;
-}
-#clientsSnackbar ul::-webkit-scrollbar-thumb {
-    background: var(--bg-dark);
-    border-radius: 4px;
-}
+    .loader {
+        text-align: center;
+        padding: 15px;
+        color: #888;
+        font-size: 14px;
+    }
 </style>
 @endsection

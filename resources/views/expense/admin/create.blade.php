@@ -48,9 +48,9 @@
             </script>
         @endif
 
-        <div class="page-actions">
+        {{-- <div class="page-actions">
             <a href="{{ route('admin_draft.create') }}" class="start-session-btn" aria-label="بدء جلسه">مصروف الموظفين</a>
-        </div>
+        </div> --}}
         <h2 class="page-title">إضافة مصروف جديد</h2>
 
         <div class="form-container animate__animated animate__fadeInUp">

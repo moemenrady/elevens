@@ -33,17 +33,17 @@ Route::middleware('guest')->group(function () {
 });
 
 
-Route::middleware(['auth', 'admin', 'verified'])->group(function () {
+Route::middleware('auth')->group(function () {
 
-  Route::get('register', [RegisteredUserController::class, 'create'])
-    ->name('register');
-  Route::get('/users', [RegisteredUserController::class, 'index'])->name('users.create')->middleware('admin');
+      Route::get('register', [RegisteredUserController::class, 'create'])
+    ->name('register')->middleware("admin");
+Route::get('/users', [RegisteredUserController::class, 'index'])->name('users.create')->middleware('admin');
 
   Route::post('register', [RegisteredUserController::class, 'store'])->middleware("admin");;
-  Route::get('/users/ajax-search', [RegisteredUserController::class, 'ajaxSearch'])->name('users.ajaxSearch')->middleware('admin');
+Route::get('/users/ajax-search', [RegisteredUserController::class, 'ajaxSearch'])->name('users.ajaxSearch')->middleware('admin');
 
-  Route::get('register/verify', [RegisteredUserController::class, 'showVerifyForm'])->name('register.verify.show');
-  Route::post('register/verify', [RegisteredUserController::class, 'verifyCode'])->name('register.verify.post');
+Route::get('register/verify', [RegisteredUserController::class, 'showVerifyForm'])->name('register.verify.show');
+Route::post('register/verify', [RegisteredUserController::class, 'verifyCode'])->name('register.verify.post');
   // Route::get('verify-email', EmailVerificationPromptController::class)
   //   ->name('verification.notice');
 

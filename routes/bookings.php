@@ -2,9 +2,10 @@
 
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\BookingPurchaseController;
-
+use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth', )->group(function () {
+      Route::post('/bookings/bulk-cancel', [BookingController::class, 'bulkCancel'])->name('bookings.bulkCancel');
   Route::post('/bookings/{booking}/purchases/update', [BookingPurchaseController::class, 'updatePurchases'])
     ->name('booking.purchases.update');
   Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel'])
@@ -15,9 +16,10 @@ Route::middleware('auth', )->group(function () {
 
   // جلب تقديري للسعر (مستخدم من الواجهة)
   Route::get('bookings/estimate', [BookingController::class, 'estimate'])
-    ->name('bookings.estimate');
+    ->name('bookings.estimate'); 
 
-  Route::get('/bookings/ajax-search', [BookingController::class, 'ajaxSearch'])->name('bookings.ajaxSearch');
+
+  // Route::get('/bookings/ajax-search', [BookingController::class, 'ajaxSearch'])->name('bookings.ajaxSearch');
   Route::get('/bookings/ajax-search-manager', [BookingController::class, 'ajaxSearchManager'])->name('bookings.ajaxSearchManager');
 
   Route::get('/bookings/search', [BookingController::class, 'search'])->name('bookings.search');
@@ -42,7 +44,9 @@ Route::middleware('auth', )->group(function () {
 
   Route::get('/bookings/{booking}/edit', [BookingController::class, 'edit'])->name('bookings.edit');
   // مكان مناسب ضمن الـ group الخاص بالـ bookings
-  Route::put('bookings/{booking}', [BookingController::class, 'update'])->name('bookings.update');
+  Route::put('bookings/update/{booking}', [BookingController::class, 'update'])->name('bookings.update');
+  Route::put('bookings/{booking}/real-start-time', [BookingController::class, 'updateRealStartTime'])
+    ->name('bookings.updateRealStartTime');
 
   Route::get('/bookings/same-day', [BookingController::class, 'sameDay'])
     ->name('bookings.sameDay');

@@ -6,68 +6,14 @@ use App\Models\Expense;
 use App\Models\ExpenseType;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use App\Models\Transaction;
+use App\Models\Client;
+use App\Models\Partner;
 use DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Services\AnalyticsService;
-
 class AnalyticsController extends Controller
 {
-
-  public function index(Request $request)
-  {
-    // 1. استقبال تواريخ الفلتر
-    $fromDate = $request->input('from_date');
-    $toDate = $request->input('to_date');
-
-    // 2. بناء الاستعلام الأساسي للمصاريف فقط (type = 'out')
-    $query = Transaction::where('type', 'out');
-
-    // تطبيق فلتر التاريخ إذا وُجد
-    if ($fromDate) {
-      $query->whereDate('created_at', '>=', $fromDate);
-    }
-    if ($toDate) {
-      $query->whereDate('created_at', '<=', $toDate);
-    }
-
-    // 3. حساب إجمالي ما تم صرفه بناءً على الفلتر
-    $totalSpent = (float) $query->sum('amount');
-
-    // 4. جلب توزيع المصاريف لكل بند (تصنيف)
-    // سنقوم بجلب الأنواع مع حساب مجموع مبالغها وعدد حركاتها في استعلام واحد
-    $typesReport = ExpenseType::withSum(['transactions' => function ($q) use ($fromDate, $toDate) {
-      $q->where('type', 'out');
-      if ($fromDate) $q->whereDate('created_at', '>=', $fromDate);
-      if ($toDate) $q->whereDate('created_at', '<=', $toDate);
-    }], 'amount')
-      ->withCount(['transactions' => function ($q) use ($fromDate, $toDate) {
-        $q->where('type', 'out');
-        if ($fromDate) $q->whereDate('created_at', '>=', $fromDate);
-        if ($toDate) $q->whereDate('created_at', '<=', $toDate);
-      }])
-      ->get();
-
-    // ملاحظة: Laravel تلقائياً سيسمي الحقول المضافة:
-    // transactions_sum_amount و transactions_count
-    // سنقوم بعمل map بسيط لتتوافق مع المسميات في الـ View الذي صممناه
-    $typesReport = $typesReport->map(function ($item) {
-      $item->expenses_sum_amount = $item->transactions_sum_amount ?? 0;
-      $item->expenses_count = $item->transactions_count ?? 0;
-      return $item;
-    });
-
-    // 5. تحديد أعلى بند صرف
-    $topType = $typesReport->sortByDesc('expenses_sum_amount')->first();
-
-    // 6. العودة للـ View مع البيانات
-    return view('dashboard.analytics.index', compact(
-      'totalSpent',
-      'typesReport',
-      'topType'
-    ));
-  }
   protected $analytics;
 
   public function __construct(AnalyticsService $analytics)
@@ -108,11 +54,14 @@ class AnalyticsController extends Controller
    */
   public function all()
   {
+    $Booking = $this->modelIfExists('Booking');
     $Client = $this->modelIfExists('Client');
     $Product = $this->modelIfExists('Product');
     $Payment = $this->modelIfExists('Payment'); // أو Transaction, Receipt حسب مشروعك
+    $Subscription = $this->modelIfExists('Subscription');
 
     // إجماليات بسيطة
+    $totalBookings = $this->countModel($Booking);
     $totalClients = $this->countModel($Client);
     $totalProducts = $this->countModel($Product);
 
@@ -138,6 +87,7 @@ class AnalyticsController extends Controller
     $churn = null;
 
     return view('analytics.all', compact(
+      'totalBookings',
       'totalClients',
       'totalProducts',
       'totalRevenue',
@@ -147,33 +97,137 @@ class AnalyticsController extends Controller
     ));
   }
 
-  public function clients()
+  /**
+   * تحليل الحجوزات
+   */
+  public function bookings()
   {
-    $Client = $this->modelIfExists('Client');
+    $Booking = $this->modelIfExists('Booking');
+    $Hall = $this->modelIfExists('Hall');
 
-    $newClients = null;
-    $activeClients = null;
-    $topClients = [];
+    $totalBookings = $this->countModel($Booking);
+    $cancelled = $Booking ? $Booking::query()->where('status', 'cancelled')->count() : null;
 
-    if ($Client) {
+    // متوسط مدة لو عندك عمود duration_minutes
+    $avgDuration = null;
+    if ($Booking) {
       try {
-        $newClients = $Client::query()->whereDate('created_at', '>=', Carbon::now()->subDays(7))->count();
-        // active: مثال على من سجل نشاط خلال 30 يوم (يعتمد موديلك)
-        if (method_exists($Client::query()->getModel(), 'scopeActive')) {
-          // لو عندك scopeActive
-          $activeClients = $Client::query()->active()->count();
-        } else {
-          $activeClients = $Client::query()->count();
-        }
-        // أفضل عملاء حسب visits_count إذا موجود حقل
-        $topClients = $Client::query()->orderByDesc('visits_count')->take(5)->get();
+        $avgDuration = $Booking::query()->avg('duration_minutes');
+        $avgDuration = $avgDuration !== null ? round($avgDuration, 1) : null;
       } catch (\Throwable $e) {
-        $newClients = $activeClients = null;
-        $topClients = [];
+        $avgDuration = null;
       }
     }
 
-    return view('analytics.clients', compact('newClients', 'activeClients', 'topClients'));
+    $latestBookings = [];
+    if ($Booking) {
+      try {
+        $latestBookings = $Booking::query()->latest('start_at')->take(10)->get();
+      } catch (\Throwable $e) {
+        $latestBookings = [];
+      }
+    }
+
+    return view('analytics.bookings', compact('totalBookings', 'cancelled', 'avgDuration', 'latestBookings'));
+  }
+
+  /**
+   * تحليل العملاء
+   */
+  public function clients(Request $request)
+
+  {
+    $from = $request->query('from');
+    $to   = $request->query('to');
+
+    if (!$from || !$to) {
+      $from = now()->subDays(30)->toDateString();
+      $to   = now()->toDateString();
+    }
+    // أوقات
+    $now = Carbon::now();
+
+    // ===== العملاء =====
+    $totalClients = Client::count();
+
+    $totalVisits = Invoice::where('total', '>', 0)->count();
+
+
+    $avgVisitsPerClient = $totalClients > 0
+      ? round($totalVisits / $totalClients, 1)
+      : 0;
+
+    $topClients = Client::withCount([
+      'invoices as invoices_count' => function ($q) {
+        $q->where('total', '>', 0);
+      }
+    ])
+      ->orderByDesc('invoices_count')
+      ->take(10)
+      ->get();
+
+
+    $clientsInRange = Client::whereBetween('created_at', [
+      Carbon::parse($from)->startOfDay(),
+      Carbon::parse($to)->endOfDay()
+    ])->count();
+
+    $clientsLastDay   = Client::whereDate('created_at', $now->toDateString())->count();
+    $clientsLastWeek  = Client::where('created_at', '>=', $now->subDays(7))->count();
+    $clientsLastMonth = Client::where('created_at', '>=', $now->subMonth())->count();
+    $clientsLastYear  = Client::where('created_at', '>=', $now->subYear())->count();
+
+    $visitsLastWeek = Invoice::where('total', '>', 0)
+      ->where('created_at', '>=', now()->subDays(7))
+      ->count();
+
+    $visitsLastMonth = Invoice::where('total', '>', 0)
+      ->where('created_at', '>=', now()->subMonth())
+      ->count();
+
+
+
+
+    // ===== الأعمار =====
+    $ageStats = [
+      'under18' => Client::where('age', '<', 18)->count(),
+      '18_25'   => Client::whereBetween('age', [18, 25])->count(),
+      '25_35'   => Client::whereBetween('age', [26, 35])->count(),
+      '35plus'  => Client::where('age', '>', 35)->count(),
+    ];
+
+    // ===== المراحل التعليمية =====
+    $educationStats = Client::select('education_stage_id', DB::raw('count(*) as total'))
+      ->whereNotNull('education_stage_id')
+      ->groupBy('education_stage_id')
+      ->with('educationStage')
+      ->get();
+
+    // ===== التخصصات =====
+    $specializationStats = Client::select('specialization_id', DB::raw('count(*) as total'))
+      ->whereNotNull('specialization_id')
+      ->groupBy('specialization_id')
+      ->with('specialization')
+      ->get();
+
+    return view('analytics.clients', compact(
+      'totalClients',
+      'clientsInRange',
+      'from',
+      'to',
+      'totalVisits',
+      'avgVisitsPerClient',
+      'topClients',
+      'clientsLastDay',
+      'clientsLastWeek',
+      'clientsLastMonth',
+      'clientsLastYear',
+      'visitsLastWeek',
+      'visitsLastMonth',
+      'ageStats',
+      'educationStats',
+      'specializationStats'
+    ));
   }
 
   /**
@@ -251,10 +305,10 @@ class AnalyticsController extends Controller
     // 3) إجمالي المصاريف
     // ================================
     $productsMaterialExpenseId = ExpenseType::where('is_product_material', true)->value('id');
-
+    
     $totalExpenses = (clone $expenseQuery)->where('expense_type_id', '!=', $productsMaterialExpenseId)->sum('amount');
 
-    // ================================
+  // ================================
     // 4) إجمالي شراء المنتجات
     // ================================
 
@@ -267,7 +321,7 @@ class AnalyticsController extends Controller
     // 4) صافي الربح
     // ================================
 
-    $netProfit = $totalIncome - ($totalExpenses + $productInvoiceItems);
+    $netProfit = $totalIncome - ($totalExpenses+$productInvoiceItems);
 
     // ================================
     // 5) نسبة الربح
@@ -317,7 +371,7 @@ class AnalyticsController extends Controller
     $growthRate = $lastMonth > 0
       ? round((($thisMonth - $lastMonth) / $lastMonth) * 100, 2)
       : 0;
-
+$partners = Partner::where('percentage', '>', 0)->get(); // جلب الشركاء اللي ليهم نسبة فقط
     // ================================
     // 10) Return View
     // ================================
@@ -331,13 +385,42 @@ class AnalyticsController extends Controller
       'growthRate' => $growthRate,
       'topIncomeDay' => $topIncomeDay,
       'topService' => $topService,
-      'productInvoiceItems' => $productInvoiceItems,
+      'productInvoiceItems'=>$productInvoiceItems,
+      'partners'=>$partners
     ]);
   }
 
 
 
+  /**
+   * تحليل الخطط (Plans)
+   */
+  public function plans()
+  {
+    $Subscription = $this->modelIfExists('Subscription');
+    $Plan = $this->modelIfExists('Plan');
 
+    $subscribers = $this->countModel($Subscription);
+    $topPlan = null;
+
+    if ($Subscription && $Plan) {
+      try {
+        $row = $Subscription::query()
+          ->selectRaw('plan_id, count(*) as cnt')
+          ->groupBy('plan_id')
+          ->orderByDesc('cnt')
+          ->first();
+        if ($row && $row->plan_id) {
+          $p = $Plan::find($row->plan_id);
+          $topPlan = $p ? $p->name : null;
+        }
+      } catch (\Throwable $e) {
+        $topPlan = null;
+      }
+    }
+
+    return view('analytics.plans', compact('subscribers', 'topPlan'));
+  }
 
   /**
    * تحليل المنتجات
@@ -573,4 +656,5 @@ class AnalyticsController extends Controller
       'topService'
     ));
   }
+
 }

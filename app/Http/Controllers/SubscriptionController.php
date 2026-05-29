@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -18,6 +19,32 @@ use App\Models\SubscriptionVisit;
 
 class SubscriptionController extends Controller
 {
+public function deleteVisit($id)
+{
+    // نجيب الزيارة
+    $visit = SubscriptionVisit::findOrFail($id);
+
+    // نجيب الاشتراك
+    $subscription = $visit->subscription;
+
+    DB::beginTransaction();
+    try {
+        // 1) احذف الزيارة
+        $visit->delete();
+
+        // 2) رجّع عدد الزيارات للاشتراك
+        if ($subscription) {
+            $subscription->increment('remaining_visits');
+        }
+
+        DB::commit();
+
+        return redirect()->back()->with('success', 'تم حذف الزيارة بنجاح.');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()->with('error', 'حدث خطأ أثناء حذف الزيارة.');
+    }
+}
 
   public function index()
   {
@@ -36,81 +63,41 @@ public function ajaxSearch(Request $request)
     $plans = $request->query('plans', []);
 
     $subs = Subscription::with(['client', 'plan'])
-        ->when($q, function ($query) use ($q) {
-            $query->where(function($qq) use ($q) {
-                // لو المستخدم كتب رقم (أو id) نجرب المطابقة بالـ id
-                if (is_numeric($q)) {
-                    $qq->orWhere('id', $q)
-                       ->orWhereHas('client', fn($c) => $c->where('id', $q));
-                }
-                // البحث بـ name أو phone داخل علاقة client
-                $qq->orWhereHas('client', fn($c) =>
-                    $c->where('name', 'like', "%{$q}%")
-                      ->orWhere('phone', 'like', "%{$q}%")
-                );
-            });
-        })
-        ->when($statuses, fn($query) => $query->whereIn('is_active', (array)$statuses))
-        ->when($plans, fn($query) => $query->whereIn('plan_id', (array)$plans))
-        ->orderBy('start_date', 'desc')
-        ->get();
+      ->when($q, function ($query) use ($q) {
+        $query->where(function ($qq) use ($q) {
+          // لو المستخدم كتب رقم (أو id) نجرب المطابقة بالـ id
+          if (is_numeric($q)) {
+            $qq->orWhere('id', $q)
+              ->orWhereHas('client', fn($c) => $c->where('id', $q));
+          }
+          // البحث بـ name أو phone داخل علاقة client
+          $qq->orWhereHas(
+            'client',
+            fn($c) =>
+            $c->where('name', 'like', "%{$q}%")
+              ->orWhere('phone', 'like', "%{$q}%")
+          );
+        });
+      })
+      ->when($statuses, fn($query) => $query->whereIn('is_active', (array) $statuses))
+      ->when($plans, fn($query) => $query->whereIn('plan_id', (array) $plans))
+      ->orderBy('start_date', 'desc')
+      ->get();
 
     return response()->json($subs->map(function ($s) {
-        return [
-            'id' => $s->id,
-            'client_name' => $s->client->name ?? '',
-            'client_phone' => $s->client->phone ?? '',
-            'plan_name' => $s->plan->name ?? '',
-            'start_date' => $s->start_date,
-            'end_date' => $s->end_date,
-            'remaining_visits' => $s->remaining_visits,
-            'is_active' => $s->is_active ? 'فعال' : 'منتهي',
-        ];
+      return [
+        'id' => $s->id,
+        'client_name' => $s->client->name ?? '',
+        'client_phone' => $s->client->phone ?? '',
+        'plan_name' => $s->plan->name ?? '',
+        'start_date' => $s->start_date,
+        'end_date' => $s->end_date,
+        'remaining_visits' => $s->remaining_visits,
+        'is_active' => $s->is_active ? 'فعال' : 'منتهي',
+      ];
     }));
-}
+  }
 
-public function ajaxSearchManager(Request $request)
-{
-    // مرونة: نقبل q أو search أو query
-    $q = $request->query('q') ?? $request->query('search') ?? $request->query('query');
-
-    $statuses = $request->query('statuses', []);
-    $plans = $request->query('plans', []);
-
-    $subs = Subscription::with(['client', 'plan'])
-        ->where('is_active', true)
-        ->when($q, function ($query) use ($q) {
-            $query->where(function($qq) use ($q) {
-                // لو المستخدم كتب رقم (أو id) نجرب المطابقة بالـ id
-                if (is_numeric($q)) {
-                    $qq->orWhere('id', $q)
-                       ->orWhereHas('client', fn($c) => $c->where('id', $q));
-                }
-                // البحث بـ name أو phone داخل علاقة client
-                $qq->orWhereHas('client', fn($c) =>
-                    $c->where('name', 'like', "%{$q}%")
-                      ->orWhere('phone', 'like', "%{$q}%")
-                );
-            });
-        })
-        ->when($statuses, fn($query) => $query->whereIn('is_active', (array)$statuses))
-        ->when($plans, fn($query) => $query->whereIn('plan_id', (array)$plans))
-        ->orderBy('start_date', 'desc')
-        ->get();
-
-    return response()->json($subs->map(function ($s) {
-        return [
-            'id' => $s->id,
-            'client_name' => $s->client->name ?? '',
-            'client_phone' => $s->client->phone ?? '',
-            'plan_name' => $s->plan->name ?? '',
-            'start_date' => $s->start_date,
-            'end_date' => $s->end_date,
-            'remaining_visits' => $s->remaining_visits,
-            'is_active' => $s->is_active ? 'فعال' : 'منتهي',
-        ];
-    }));
-}
 
   public function create()
   {
@@ -329,6 +316,7 @@ public function ajaxSearchManager(Request $request)
         'required',
         'exists:subscription_plans,id'
       ],
+      'payment_type' => ['nullable', 'string'],
     ], [
       'name.required' => 'من فضلك أدخل اسم العميل',
       'name.string' => 'الاسم يجب أن يكون نصًا',
@@ -346,6 +334,8 @@ public function ajaxSearchManager(Request $request)
     $phone = $request->input('phone');
     $name = $request->input('name');
     $planId = $request->input('plan_id');
+    $paymentType = $request->input('payment_type');
+
 
     // جلب الخطة (ستطرح ModelNotFoundException لو غير موجود)
     $plan = SubscriptionPlan::findOrFail($planId);
@@ -437,6 +427,7 @@ public function ajaxSearchManager(Request $request)
           'shift_id' => $openShift->id,
           'action_type' => 'new_subscription',
           'invoice_id' => $invoice->id,
+          'payment_type' => $paymentType,
           'expense_draft_id' => null,
           'expense_amount' => null,
           'amount' => $invoice->total,
@@ -448,6 +439,7 @@ public function ajaxSearchManager(Request $request)
           'shift_id' => $openShift->id,
           'action_type' => 'new_subscription',
           'invoice_id' => $invoice->id,
+          'payment_type' => $paymentType,
           'expense_draft_id' => null,
           'expense_amount' => null,
           'amount' => $invoice->total,
@@ -472,179 +464,187 @@ public function ajaxSearchManager(Request $request)
     }
   }
 
- 
-public function decrease(Subscription $subscription)
-{
+
+  public function decrease(Subscription $subscription)
+  {
     // نفتح transaction و lock للصف الخاص بالاشتراك عشان نمنع حالات السباق
     return DB::transaction(function () use ($subscription) {
 
-        // إعادة جلب الاشتراك مع lock
-        $subscription = Subscription::lockForUpdate()->find($subscription->id);
+      // إعادة جلب الاشتراك مع lock
+      $subscription = Subscription::lockForUpdate()->find($subscription->id);
 
-        // تحقق إن الاشتراك موجود
-        if (!$subscription) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Subscription not found',
-            ], 404);
-        }
+      // تحقق إن الاشتراك موجود
+      if (!$subscription) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Subscription not found',
+        ], 404);
+      }
 
-        // تحقق من صلاحية الاشتراك بالتاريخ والحالة
-        if (!$subscription->is_active || ($subscription->end_date && Carbon::today()->gt(Carbon::parse($subscription->end_date)))) {
-            return response()->json([
-                'success' => false,
-                'redirect' => route('subscriptions.index'),
-                'message' => '❌ لا يمكن استخدام هذا الاشتراك لأنه منتهي أو غير فعال.'
-            ], 422);
-        }
+      // تحقق من صلاحية الاشتراك بالتاريخ والحالة
+      if (!$subscription->is_active || ($subscription->end_date && Carbon::today()->gt(Carbon::parse($subscription->end_date)))) {
+        return response()->json([
+          'success' => false,
+          'redirect' => route('subscriptions.index'),
+          'message' => '❌ لا يمكن استخدام هذا الاشتراك لأنه منتهي أو غير فعال.'
+        ], 422);
+      }
 
-        // ============================
-        // إنشاء سجل الزيارة (قبل أو بعد التنقيص حسب منطقك)
-        // ============================
-        // حساب رقم الزيارة داخل الاشتراك
-        $visitNumber = $subscription->visits()->count() + 1;
+      // ============================
+      // إنشاء سجل الزيارة (قبل أو بعد التنقيص حسب منطقك)
+      // ============================
+      // حساب رقم الزيارة داخل الاشتراك
+      $visitNumber = $subscription->visits()->count() + 1;
 
-        $visit = SubscriptionVisit::create([
-            'subscription_id'   => $subscription->id,
-            'client_id'         => $subscription->client_id,
-            'visit_number'      => $visitNumber,
-            'checked_in_at'     => now(),
-            'attended'          => true,
-            'notes'             => null,               // لو عايز تجيب من request ممكن تعدل
-            'created_by'        => auth()->id() ?? null,
-        ]);
+      $visit = SubscriptionVisit::create([
+        'subscription_id' => $subscription->id,
+        'client_id' => $subscription->client_id,
+        'visit_number' => $visitNumber,
+        'checked_in_at' => now(),
+        'attended' => true,
+        'notes' => null,               // لو عايز تجيب من request ممكن تعدل
+        'created_by' => auth()->id() ?? null,
+      ]);
 
-        // ============================
-        // تنقيص الزيارات أو التعامل مع اشتراكات غير محددة
-        // ============================
-        // لو remaining_visits معرف ومقيد
-        if (!is_null($subscription->remaining_visits)) {
-            if ($subscription->remaining_visits > 1) {
-                $subscription->decrement('remaining_visits');
-                $subscription->update([
-                    'attendees' => 1,
-                    'visit_date' => now()
-                ]);
-
-                // إعادة البيانات للـ frontend
-                return response()->json([
-                    'success' => true,
-                    'message' => 'تم تسجيل الزيارة وتنقيص عدد الزيارات.',
-                    'remaining_visits' => $subscription->remaining_visits,
-                    'visit' => $visit
-                ]);
-            } elseif ($subscription->remaining_visits == 1) {
-                // هذه آخر زيارة
-                $subscription->decrement('remaining_visits');
-                $subscription->update([
-                    'attendees' => 1,
-                    'visit_date' => now(),
-                    'is_active' => false,
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'redirect' => route('subscriptions.index'),
-                    'message' => '✅ هذه آخر زيارة في اشتراك العميل (' . $subscription->client->name . ')',
-                    'remaining_visits' => $subscription->remaining_visits,
-                    'visit' => $visit
-                ]);
-            } else {
-                // remaining_visits <= 0 (لا توجد زيارات متبقية) — لكن لأننا هنا أنشأنا زيارة، يمكن التراجع أو رفض
-                // أفضل سلوك: rollback بالـ transaction وارجاع خطأ
-                DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'redirect' => route('subscriptions.index'),
-                    'message' => '❌ لا يوجد زيارات متبقية للاشتراك الخاص بالعميل (' . $subscription->client->name . ')'
-                ], 422);
-            }
-        }
-
-        // لو الاشتراك غير مقيد بعدد زيارات (remaining_visits == null) — نسجل الزيارة فقط ولا ننقص شيئًا
-        $subscription->update([
+      // ============================
+      // تنقيص الزيارات أو التعامل مع اشتراكات غير محددة
+      // ============================
+      // لو remaining_visits معرف ومقيد
+      if (!is_null($subscription->remaining_visits)) {
+        if ($subscription->remaining_visits > 1) {
+          $subscription->decrement('remaining_visits');
+          $subscription->update([
             'attendees' => 1,
             'visit_date' => now()
-        ]);
+          ]);
 
-        return response()->json([
+          // إعادة البيانات للـ frontend
+          return response()->json([
             'success' => true,
-            'message' => 'تم تسجيل الزيارة (اشتراك غير مقيد بعدد جلسات).',
+            'message' => 'تم تسجيل الزيارة وتنقيص عدد الزيارات.',
+            'remaining_visits' => $subscription->remaining_visits,
             'visit' => $visit
-        ]);
-    }); // end transaction
-}
+          ]);
+        } elseif ($subscription->remaining_visits == 1) {
+          // هذه آخر زيارة
+          $subscription->decrement('remaining_visits');
+          $subscription->update([
+            'attendees' => 1,
+            'visit_date' => now(),
+            'is_active' => false,
+          ]);
 
-public function decreaseFromSession(Subscription $subscription)
-{
+          return response()->json([
+            'success' => true,
+            'redirect' => route('subscriptions.index'),
+            'message' => '✅ هذه آخر زيارة في اشتراك العميل (' . $subscription->client->name . ')',
+            'remaining_visits' => $subscription->remaining_visits,
+            'visit' => $visit
+          ]);
+        } else {
+          // remaining_visits <= 0 (لا توجد زيارات متبقية) — لكن لأننا هنا أنشأنا زيارة، يمكن التراجع أو رفض
+          // أفضل سلوك: rollback بالـ transaction وارجاع خطأ
+          DB::rollBack();
+          return response()->json([
+            'success' => false,
+            'redirect' => route('subscriptions.index'),
+            'message' => '❌ لا يوجد زيارات متبقية للاشتراك الخاص بالعميل (' . $subscription->client->name . ')'
+          ], 422);
+        }
+      }
+
+      // لو الاشتراك غير مقيد بعدد زيارات (remaining_visits == null) — نسجل الزيارة فقط ولا ننقص شيئًا
+      $subscription->update([
+        'attendees' => 1,
+        'visit_date' => now()
+      ]);
+
+      return response()->json([
+        'success' => true,
+        'message' => 'تم تسجيل الزيارة (اشتراك غير مقيد بعدد جلسات).',
+        'visit' => $visit
+      ]);
+    });
+  }
+  public function decreaseFromSession(Subscription $subscription)
+  {
     return DB::transaction(function () use ($subscription) {
 
-        // إعادة جلب الاشتراك مع lock
-        $subscription = Subscription::lockForUpdate()->find($subscription->id);
+      // إعادة جلب الاشتراك مع lock
+      $subscription = Subscription::lockForUpdate()->find($subscription->id);
 
-        if (!$subscription) {
-            return redirect()->route('subscriptions.index')
-                ->with('error', '❌ الاشتراك غير موجود');
-        }
+      if (!$subscription) {
+        return redirect()->route('subscriptions.index')
+          ->with('error', '❌ الاشتراك غير موجود');
+      }
 
-        // تحقق من صلاحية الاشتراك
-        if (!$subscription->is_active || ($subscription->end_date && Carbon::today()->gt(Carbon::parse($subscription->end_date)))) {
-            return redirect()->route('subscriptions.index')
-                ->with('error', '❌ لا يمكن استخدام هذا الاشتراك لأنه منتهي أو غير فعال.');
-        }
+      // تحقق من صلاحية الاشتراك
+      if (!$subscription->is_active || ($subscription->end_date && Carbon::today()->gt(Carbon::parse($subscription->end_date)))) {
+        return redirect()->route('subscriptions.index')
+          ->with('error', '❌ لا يمكن استخدام هذا الاشتراك لأنه منتهي أو غير فعال.');
+      }
 
-        // حساب رقم الزيارة داخل الاشتراك
-        $visitNumber = $subscription->visits()->count() + 1;
+      // حساب رقم الزيارة داخل الاشتراك
+      $visitNumber = $subscription->visits()->count() + 1;
 
-        $visit = SubscriptionVisit::create([
-            'subscription_id'   => $subscription->id,
-            'client_id'         => $subscription->client_id,
-            'visit_number'      => $visitNumber,
-            'checked_in_at'     => now(),
-            'attended'          => true,
-            'notes'             => null,
-            'created_by'        => auth()->id() ?? null,
-        ]);
+      $visit = SubscriptionVisit::create([
+        'subscription_id' => $subscription->id,
+        'client_id' => $subscription->client_id,
+        'visit_number' => $visitNumber,
+        'checked_in_at' => now(),
+        'attended' => true,
+        'notes' => null,
+        'created_by' => auth()->id() ?? null,
+      ]);
 
-        // لو remaining_visits معرف ومقيد
-        if (!is_null($subscription->remaining_visits)) {
-            if ($subscription->remaining_visits > 1) {
-                $subscription->decrement('remaining_visits');
-                $subscription->update([
-                    'attendees' => 1,
-                    'visit_date' => now()
-                ]);
-
-                return redirect()->route('session.index-manager')
-                    ->with('success', 'تم تسجيل الزيارة وتنقيص عدد الزيارات. المتبقي: ' . $subscription->remaining_visits);
-            } elseif ($subscription->remaining_visits == 1) {
-                $subscription->decrement('remaining_visits');
-                $subscription->update([
-                    'attendees' => 1,
-                    'visit_date' => now(),
-                    'is_active' => false,
-                ]);
-
-                return redirect()->route('subscriptions.index')
-                    ->with('success', '✅ هذه آخر زيارة في اشتراك العميل (' . $subscription->client->name . ')');
-            } else {
-                // remaining_visits <= 0
-                DB::rollBack();
-                return redirect()->route('subscriptions.index')
-                    ->with('error', '❌ لا يوجد زيارات متبقية للاشتراك الخاص بالعميل (' . $subscription->client->name . ')');
-            }
-        }
-
-        // لو الاشتراك غير محدود
-        $subscription->update([
+      // لو remaining_visits معرف ومقيد
+      if (!is_null($subscription->remaining_visits)) {
+        if ($subscription->remaining_visits > 1) {
+          $subscription->decrement('remaining_visits');
+          $subscription->update([
             'attendees' => 1,
             'visit_date' => now()
-        ]);
+          ]);
 
-        return redirect()->route('subscriptions.index')
-            ->with('success', 'تم تسجيل الزيارة (اشتراك غير مقيد بعدد جلسات).');
+          return redirect()->route('session.index-manager')
+            ->with('success', 'تم تسجيل الزيارة وتنقيص عدد الزيارات. المتبقي: ' . $subscription->remaining_visits);
+        } elseif ($subscription->remaining_visits == 1) {
+          $subscription->decrement('remaining_visits');
+          $subscription->update([
+            'attendees' => 1,
+            'visit_date' => now(),
+            'is_active' => false,
+          ]);
+
+          return redirect()->route('subscriptions.index')
+            ->with('success', '✅ هذه آخر زيارة في اشتراك العميل (' . $subscription->client->name . ')');
+        } else {
+          // remaining_visits <= 0
+          DB::rollBack();
+          return redirect()->route('subscriptions.index')
+            ->with('error', '❌ لا يوجد زيارات متبقية للاشتراك الخاص بالعميل (' . $subscription->client->name . ')');
+        }
+      }
+
+      // لو الاشتراك غير محدود
+      $subscription->update([
+        'attendees' => 1,
+        'visit_date' => now()
+      ]);
+
+      return redirect()->route('subscriptions.index')
+        ->with('success', 'تم تسجيل الزيارة (اشتراك غير مقيد بعدد جلسات).');
     });
-}
-
+  }
+ public function destroy(Subscription $subscription)
+  {
+    try {
+      $subscription->delete(); // لو استخدمت SoftDeletes
+      return response()->json(['status' => true, 'message' => 'تم الحذف بنجاح']);
+    } catch (\Exception $e) {
+      \Log::error('Subscription delete failed: ' . $e->getMessage(), ['id' => $subscription->id]);
+      return response()->json(['status' => false, 'message' => 'حدث خطأ أثناء الحذف'], 500);
+    }
+  }
 
 }

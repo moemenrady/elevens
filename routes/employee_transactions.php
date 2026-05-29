@@ -20,4 +20,10 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/employee_transactions/{employee_transaction}', [EmployeeTransactionsController::class, 'destroy'])
         ->name('employee_transactions.destroy');
     Route::get('/employees/{id}/free-drink-status', [EmployeeTransactionsController::class, 'freeDrinkStatus']);
+
+
+    // إدارة العمليات المالية (Transactions)
+    Route::post('/employees/{id}/transactions', [EmployeeTransactionsController::class, 'storeTransaction'])->name('employees.transactions.store');
+    Route::put('/transactions/{id}', [EmployeeTransactionsController::class, 'updateTransaction'])->name('employees.transactions.update');
+    Route::delete('/transactions/{id}', [EmployeeTransactionsController::class, 'destroyTransaction'])->name('employees.transactions.destroy');
 });

@@ -15,9 +15,5 @@ class Partner extends Model
         'last_capital_snapshot',
     ];
 
-    public function transactions()
-    {
-        return $this->hasMany(Transaction::class);
-    }
 
 } 

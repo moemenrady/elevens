@@ -12,11 +12,8 @@ Route::middleware('auth')->group(function () {
   Route::post('/sessions/{session}/purchases/update', [SessionPurchaseController::class, 'updatePurchases'])
     ->name('sessionPurchases.update');
 
-  Route::post('/start_session', [SationController::class, 'store'])
-    ->name("session.store");
-
-  Route::post('/start_session/manager', [SationController::class, 'storeFromManager'])
-    ->name("session.store.manager");
+  Route::post('/start_session', [SationController::class, 'store'])->name("session.store")->middleware("auth");
+  Route::post('/start_session', [SationController::class, 'storeFromManager'])->name("session.store.manager")->middleware("auth");
   Route::post('/session_justStart', [SationController::class, 'justStart'])->name("session.justStart")->middleware("auth");
 
   Route::get('/sessions', [SationController::class, 'index'])->name('session.index-manager')->middleware("auth");
@@ -46,4 +43,6 @@ Route::middleware('auth')->group(function () {
 
   Route::post('/sessions/split', [SationController::class, 'split'])->name('sessions.split');
   Route::post('/new-session/added', [SetionNotAddedController::class, 'store'])->name('new-session.store');
+
 });
+

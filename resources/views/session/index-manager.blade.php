@@ -114,19 +114,19 @@
         }
 
         /* .session-card {
-                                            width: 100%;
-                                            background: linear-gradient(180deg, #ffffff, #fffafa);
-                                            min-height: 72px;
-                                            border-radius: 12px;
-                                            padding: 12px 14px;
-                                            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
-                                            border-top: 4px solid rgba(217, 178, 173, 0.18);
-                                            display: flex;
-                                            justify-content: space-between;
-                                            align-items: center;
-                                            cursor: pointer;
-                                            transition: transform .25s ease, box-shadow .25s ease;
-                                        } */
+                    width: 100%;
+                    background: linear-gradient(180deg, #ffffff, #fffafa);
+                    min-height: 72px;
+                    border-radius: 12px;
+                    padding: 12px 14px;
+                    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+                    border-top: 4px solid rgba(217, 178, 173, 0.18);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    cursor: pointer;
+                    transition: transform .25s ease, box-shadow .25s ease;
+                } */
 
         .space {
             height: 50px;
@@ -820,66 +820,39 @@
             }
 
             async function fetchSessions(q = '') {
-
                 showLoading();
-
                 try {
-
-                    const url = new URL(searchRoute, window.location.origin);
-
-                    if (q) {
-                        url.searchParams.append('query', q);
-                    }
-
+                    const url = new URL(searchRoute, location.origin);
+                    if (q) url.searchParams.append('query', q);
                     const res = await fetch(url.toString(), {
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     });
-
-                    const raw = await res.text();
-
-                    console.log("RAW RESPONSE >>>", raw);
-
-                    return;
-
-                    if (!res.ok) {
-                        throw new Error('HTTP ERROR: ' + res.status);
-                    }
-
+                    if (!res.ok) throw new Error('Network response was not ok');
                     const data = await res.json();
-
                     const items = Array.isArray(data) ? data : (data.data ?? []);
 
-                    if (!items.length) {
+                    if (!items || items.length === 0) {
                         showNoResults();
                         return;
                     }
-
                     sessionsList.innerHTML = '';
-
-                    items.forEach(session => {
-                        sessionsList.insertAdjacentHTML(
-                            'beforeend',
-                            renderSessionCard(session)
-                        );
+                    items.forEach(s => {
+                        sessionsList.insertAdjacentHTML('beforeend', renderSessionCard(s));
                     });
 
+                    // ربط النقر على البطاقة للانتقال للصفحة التفصيلية
                     sessionsList.querySelectorAll('.session-card').forEach(card => {
                         card.addEventListener('click', () => {
                             const id = card.dataset.id;
-                            window.location.href = `/sessions/${id}`;
+                            if (!id) return;
+                            window.location.href = showRoute.replace(':id', id);
                         });
                     });
-
                 } catch (err) {
                     console.error(err);
-                    sessionsList.innerHTML = `
-            <div style="padding:20px;color:red;">
-                ${err.message}
-            </div>
-        `;
+                    sessionsList.innerHTML = `<p class="no-results">حدث خطأ أثناء جلب الجلسات</p>`;
                 }
             }
 

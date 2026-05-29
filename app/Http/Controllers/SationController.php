@@ -1284,6 +1284,7 @@ class SationController extends Controller
         });
       })
       ->get();
+
     return response()->json($sessions);
   }
   public function updateStartTime(Request $request, Sation $session)

@@ -2,41 +2,58 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Partner;
-use App\Models\Transaction;
 use App\Models\User;
-use Symfony\Component\HttpFoundation\Request;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    public function index()
+    // عرض صفحة التعديل
+    public function edit($id)
     {
-        $accounts = User::latest()->get();
-        $partners = Partner::all();
-        $transactions = Transaction::all();
-        $total_capital = $transactions->where('type', 'in')->sum('amount');
-
-        return view('dashboard.users.index', compact('accounts', 'partners','total_capital'));
+        $user = User::findOrFail($id);
+        return view('managment.changes.users.edit', compact('user'));
     }
-    public function blockAccount(Request $request, $id)
+
+    // تحديث البيانات
+    public function update(Request $request, $id)
     {
-        // التأكد أن من يقوم بالعملية هو الأدمن فقط
-        if (auth()->user()->role !== 'admin') {
-            abort(403, 'غير مصرح لك باتخاذ هذا الإجراء');
+        $user = User::findOrFail($id);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+            'role' => 'required|in:admin,user',
+            'password' => 'nullable|min:8',
+        ]);
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        $user->role = $request->role;
+
+        // تحديث كلمة المرور فقط في حال إدخال قيمة جديدة
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
         }
 
-        $user = \App\Models\User::findOrFail($id);
-
-        // منع الأدمن من حظر نفسه بالخطأ
-        if (auth()->id() === $user->id) {
-            return back()->with('error', 'لا يمكنك حظر حسابك الشخصي!');
-        }
-
-        // تنفيذ الحظر بجعل القيمة null
-        $user->email_verified_at = null;
         $user->save();
 
-        // السناك بار (Snackbar) سيظهر إذا كنت مبرمجه لالتقاط الـ Session ('success')
-        return back()->with('success', 'تم حظر الحساب بنجاح، لن يتمكن من استخدام النظام.');
+        return redirect()->back()->with('success', 'تم تحديث بيانات المستخدم بنجاح');
     }
+    public function toggle(User $user)
+{
+    if($user->email_verified_at) {
+        // الحظر → نجعل التاريخ null
+        $user->email_verified_at = null;
+    } else {
+        // التفعيل → نضع التاريخ الحالي
+        $user->email_verified_at = now();
+    }
+
+    $user->save();
+
+    $status = $user->email_verified_at ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب';
+    return redirect()->back()->with('success', $status);
+}
 }

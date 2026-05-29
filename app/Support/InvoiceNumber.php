@@ -6,11 +6,17 @@ use App\Models\Invoice;
 
 class InvoiceNumber
 {
+    public static function generateFromId(int $id): string
+    {
+        $date = now()->format('Ymd');
+        return "INV-{$date}-" . str_pad($id, 4, '0', STR_PAD_LEFT);
+    }
+
     public static function next(): string
     {
         $date = now()->format('Ymd');
         $prefix = "INV-{$date}-";
-        $last = Invoice::where('invoice_number','like',$prefix.'%')
+        $last = Invoice::where('invoice_number', 'like', $prefix . '%')
             ->orderByDesc('id')->value('invoice_number');
 
         $seq = 1;

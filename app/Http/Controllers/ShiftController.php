@@ -10,18 +10,16 @@ use Illuminate\Support\Carbon;
 
 class ShiftController extends Controller
 {
-
-  public function calendar(Request $request)
+  public function activeShifts()
   {
-    $year = (int) $request->input('year', now()->year);
-    $month = (int) $request->input('month', now()->month);
+    $shifts = Shift::with('user')
+      ->whereNull('end_time')
+      ->latest()
+      ->get();
 
-    // بداية ونهاية الشهر (بنقاط زمنية كاملة)
-    $monthStart = Carbon::create($year, $month, 1)->startOfDay();
-    $monthEnd = (clone $monthStart)->endOfMonth()->endOfDay();
-$grouped=[];
-    return response()->json($grouped);
+    return view('employees.active_shifts', compact('shifts'));
   }
+
   public function deposit(Request $request, $shiftId)
   {
     $shift = Shift::findOrFail($shiftId);
@@ -156,7 +154,6 @@ $grouped=[];
   }
 
 
-
   public function create()
   {
     $user = Auth::user();
@@ -242,7 +239,7 @@ $grouped=[];
   }
   public function prompt()
   {
-    $user = Auth::user();
+    $user = \Auth::user();
 
     $openShift = Shift::where('user_id', $user->id)
       ->whereNull('end_time')
@@ -296,7 +293,7 @@ $grouped=[];
     $openShift = Shift::where('user_id', $user->id)
       ->whereNull('end_time')
       ->first();
-    $isAdmin = $user->role === 'admin' || ($user->roles && $user->roles->contains('name', 'admin'));
+    $isAdmin = $user->hasRole('admin');
     if ($openShift && !$isAdmin) {
       return response()->json([
         'open' => true,
@@ -325,5 +322,23 @@ $grouped=[];
       'total_expense' => $shift->total_expense,
       'net_profit' => $shift->net_profit,
     ]);
+  }
+  public function closeShift($id)
+  {
+    $shift = Shift::findOrFail($id);
+
+    $shift->update([
+      'end_time' => now(),
+    ]);
+
+    return back()->with('success', 'تم إغلاق الشيفت');
+  }
+  public function deleteShift($id)
+  {
+    $shift = Shift::findOrFail($id);
+
+    $shift->delete();
+
+    return back()->with('success', 'تم حذف الشيفت');
   }
 }

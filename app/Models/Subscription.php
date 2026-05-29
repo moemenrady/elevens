@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes; // 🔹 استدعاء الـ SoftDeletes
 
 class Subscription extends Model
 {
+    use SoftDeletes; // 🔹 إضافة الـ trait
+
   protected $fillable = [
     'client_id',
     'plan_id',
@@ -32,7 +35,7 @@ class Subscription extends Model
   {
     return $this->belongsTo(SubscriptionPlan::class, 'plan_id');
   }
-      public function visits()
+    public function visits()
     {
         return $this->hasMany(SubscriptionVisit::class);
     }

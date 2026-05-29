@@ -28,6 +28,25 @@ use Illuminate\Http\RedirectResponse;
 class BookingController extends Controller
 {
 
+  public function bulkCancel(Request $request)
+  {
+    $request->validate(['ids' => 'required|array']);
+
+    // استخدام transaction لضمان سلامة البيانات
+    DB::transaction(function () use ($request) {
+      foreach ($request->ids as $id) {
+        $booking = Booking::findOrFail($id);
+        // ضع منطق الإلغاء الخاص بك هنا (مثل تحديث الحالة)
+        if (in_array($booking->status, ['scheduled', 'due'])) {
+          $booking->update(['status' => 'cancelled']);
+        }
+        // إذا كنت تحتاج لعمليات إضافية مثل استرجاع أموال أو مخزون:
+        // ...
+      }
+    });
+
+    return response()->json(['success' => true]);
+  }
 
   public function byDate(Request $request)
   {
@@ -65,6 +84,7 @@ class BookingController extends Controller
       'hall',
       'deposits',
       'purchases.product',
+      'timeSlots'
     ])->findOrFail($id);
 
     // مجموع الدفعة المقدمة
@@ -100,21 +120,26 @@ class BookingController extends Controller
     $total_for_calc = $real_total ?? $booking->estimated_total;
 
     // محاولة استخراج "سعر الساعات" عندما لا يوجد real_total:
-    if ($real_total !== null) {
-      $hours_total = $real_total;
-    } else {
-      // نفترض estimated_total قد يشمل المشتريات — نطرحها للحصول على جزء الساعات
-      $possible_hours = $booking->estimated_total - $purchases_total;
-      // حماية من القيم السالبة — استخدم estimated_total كبديل
-      $hours_total = $possible_hours > 0 ? $possible_hours : $booking->estimated_total;
-    }
-
+    // if ($real_total !== null) {
+    //   $hours_total = $real_total;
+    // } else {
+    //   // نفترض estimated_total قد يشمل المشتريات — نطرحها للحصول على جزء الساعات
+    //   $possible_hours = $booking->estimated_total - $purchases_total;
+    //   // حماية من القيم السالبة — استخدم estimated_total كبديل
+    //   $hours_total = $possible_hours > 0 ? $possible_hours : $booking->estimated_total;
+    // }
+    $hours_total = $booking->timeSlots->sum('total_amount');
     $combined_actual = $hours_total + $purchases_total;
 
     $remaining = $combined_actual - $deposit_paid;
     $extraPersonHourPrice = $booking->base_hour_price / 2;
     $importantProducts = ImportantProduct::get();
     $bookingHourPrice = $pricingService->readPerHour($booking->attendees, $booking->hall->min_capacity, $booking->base_hour_price, $extraPersonHourPrice);
+    $lastSlotEndTime = $booking->timeSlots->max('end_time') ?? $booking->real_start_at;
+    $unaccountedMinutes = Carbon::parse($lastSlotEndTime)->diffInMinutes(now());
+    $hasRemainingTime = $unaccountedMinutes >= 30; // هل يوجد نصف ساعة على الأقل؟
+
+    $booking_hours_total_with_minute = $real_total;
     return view('bookings.show', compact(
       'booking',
       'deposit_paid',
@@ -127,7 +152,11 @@ class BookingController extends Controller
       'bookingHourPrice',
       'purchases_total',
       'hours_total',
-      'combined_actual'
+      'combined_actual',
+      'lastSlotEndTime',
+      'unaccountedMinutes',
+      'hasRemainingTime',
+      'booking_hours_total_with_minute'
     ));
   }
 
@@ -174,88 +203,88 @@ class BookingController extends Controller
     return view('bookings.index-manager', compact('bookings', 'active_bookings_count'));
   }
 
-  public function index()
-  {
-    // لجلب بيانات افتراضية (plans في صفحة الاشتراكات) — هنا نقدر نجيب القاعات لو حبّيت فلتر
-    $halls = Hall::all();
-    // نجيب كل الحجوزات (لمرة التحميل المبكر) — لكن الواجهة بتعرض "جاري التحميل..." ثم JS يجلب عبر AJAX
-    $bookings = Booking::with(['client', 'hall'])->orderByDesc('start_at')->get();
+  // public function index()
+  // {
+  //   // لجلب بيانات افتراضية (plans في صفحة الاشتراكات) — هنا نقدر نجيب القاعات لو حبّيت فلتر
+  //   $halls = Hall::all();
+  //   // نجيب كل الحجوزات (لمرة التحميل المبكر) — لكن الواجهة بتعرض "جاري التحميل..." ثم JS يجلب عبر AJAX
+  //   $bookings = Booking::with(['client', 'hall'])->orderByDesc('start_at')->get();
 
-    return view('bookings.index', compact('halls', 'bookings'));
-  }
-  public function ajaxSearch(Request $request)
-  {
-    $query = Booking::with(['hall', 'client']);
+  //   return view('bookings.index', compact('halls', 'bookings'));
+  // }
+  // public function ajaxSearch(Request $request)
+  // {
+  //   $query = Booking::with(['hall', 'client']);
 
-    // لا نريد أبداً إرجاع الحجوزات المنتهية أو الملغاة
-    $query->whereNotIn('status', ['finished', 'cancelled']);
+  //   // لا نريد أبداً إرجاع الحجوزات المنتهية أو الملغاة
+  //   $query->whereNotIn('status', ['finished', 'cancelled']);
 
-    // 1) كلمة البحث العامة (title, client.name, client.phone, hall.name, or exact date)
-    if ($request->filled('q')) {
-      $q = $request->q;
-      $query->where(function ($sub) use ($q) {
-        $sub->where('title', 'like', "%{$q}%")
-          ->orWhereHas('client', function ($c) use ($q) {
-            $c->where('name', 'like', "%{$q}%")
-              ->orWhere('phone', 'like', "%{$q}%")
-              ->orWhere('id', $q);
-          })
-          ->orWhereHas('hall', function ($h) use ($q) {
-            $h->where('name', 'like', "%{$q}%");
-          })
-          ->orWhereDate('start_at', $q)
-          ->orWhereDate('end_at', $q);
-      });
-    }
+  //   // 1) كلمة البحث العامة (title, client.name, client.phone, hall.name, or exact date)
+  //   if ($request->filled('q')) {
+  //     $q = $request->q;
+  //     $query->where(function ($sub) use ($q) {
+  //       $sub->where('title', 'like', "%{$q}%")
+  //         ->orWhereHas('client', function ($c) use ($q) {
+  //           $c->where('name', 'like', "%{$q}%")
+  //             ->orWhere('phone', 'like', "%{$q}%")
+  //             ->orWhere('id', $q);
+  //         })
+  //         ->orWhereHas('hall', function ($h) use ($q) {
+  //           $h->where('name', 'like', "%{$q}%");
+  //         })
+  //         ->orWhereDate('start_at', $q)
+  //         ->orWhereDate('end_at', $q);
+  //     });
+  //   }
 
-    // 2) تواريخ (من - إلى) — تدعم from/to في querystring
-    if ($request->filled('from')) {
-      $query->whereDate('start_at', '>=', $request->from);
-    }
-    if ($request->filled('to')) {
-      $query->whereDate('start_at', '<=', $request->to);
-    }
+  //   // 2) تواريخ (من - إلى) — تدعم from/to في querystring
+  //   if ($request->filled('from')) {
+  //     $query->whereDate('start_at', '>=', $request->from);
+  //   }
+  //   if ($request->filled('to')) {
+  //     $query->whereDate('start_at', '<=', $request->to);
+  //   }
 
-    // 3) فلتر القاعات (halls[] يمكن أن يكون مصفوفة أو قيمة واحدة)
-    if ($request->filled('halls')) {
-      $halls = is_array($request->halls) ? $request->halls : [$request->halls];
-      $query->whereIn('hall_id', $halls);
-    }
+  //   // 3) فلتر القاعات (halls[] يمكن أن يكون مصفوفة أو قيمة واحدة)
+  //   if ($request->filled('halls')) {
+  //     $halls = is_array($request->halls) ? $request->halls : [$request->halls];
+  //     $query->whereIn('hall_id', $halls);
+  //   }
 
-    // 4) حالات (statuses[] — ممكن يختار أكثر من حالة)
-    if ($request->filled('statuses')) {
-      $statuses = is_array($request->statuses) ? $request->statuses : [$request->statuses];
-      // سمحنا بفلترة الحالة لكن نضمن استبعاد finished/cancelled لاحقاً بواسطة whereNotIn أعلاه
-      $query->whereIn('status', $statuses);
-    }
-    // ملاحظة: حتى لو مرر المستخدم حالات تتضمن finished/cancelled، فلن تُعاد لأننا استبعدناهم صراحة.
+  //   // 4) حالات (statuses[] — ممكن يختار أكثر من حالة)
+  //   if ($request->filled('statuses')) {
+  //     $statuses = is_array($request->statuses) ? $request->statuses : [$request->statuses];
+  //     // سمحنا بفلترة الحالة لكن نضمن استبعاد finished/cancelled لاحقاً بواسطة whereNotIn أعلاه
+  //     $query->whereIn('status', $statuses);
+  //   }
+  //   // ملاحظة: حتى لو مرر المستخدم حالات تتضمن finished/cancelled، فلن تُعاد لأننا استبعدناهم صراحة.
 
-    // ترتيب النتائج حسب بداية الحجز
-    $bookings = $query->orderBy('start_at', 'asc')->get();
+  //   // ترتيب النتائج حسب بداية الحجز
+  //   $bookings = $query->orderBy('start_at', 'asc')->get();
 
-    // تبسيط الحقول قبل الإرجاع (خلي JSON صغير وسهل الاستهلاك في الواجهة)
-    $data = $bookings->map(function ($b) {
-      return [
-        'id' => $b->id,
-        'title' => $b->title,
-        'hall_id' => $b->hall_id,
-        'hall_name' => $b->hall->name ?? '',
-        'client_id' => $b->client_id,
-        'client_name' => $b->client->name ?? '',
-        'client_phone' => $b->client->phone ?? '',
-        'start_at' => optional($b->start_at)->toIso8601String(),
-        'end_at' => optional($b->end_at)->toIso8601String(),
-        'date' => optional($b->start_at)->toDateString(),
-        'time_from' => optional($b->start_at)->format('H:i'),
-        'time_to' => optional($b->end_at)->format('H:i'),
-        'status' => $b->status,
-        'attendees' => $b->attendees ?? 0,
-        'estimated_total' => (float) ($b->estimated_total ?? 0),
-      ];
-    });
+  //   // تبسيط الحقول قبل الإرجاع (خلي JSON صغير وسهل الاستهلاك في الواجهة)
+  //   $data = $bookings->map(function ($b) {
+  //     return [
+  //       'id' => $b->id,
+  //       'title' => $b->title,
+  //       'hall_id' => $b->hall_id,
+  //       'hall_name' => $b->hall->name ?? '',
+  //       'client_id' => $b->client_id,
+  //       'client_name' => $b->client->name ?? '',
+  //       'client_phone' => $b->client->phone ?? '',
+  //       'start_at' => optional($b->start_at)->toIso8601String(),
+  //       'end_at' => optional($b->end_at)->toIso8601String(),
+  //       'date' => optional($b->start_at)->toDateString(),
+  //       'time_from' => optional($b->start_at)->format('H:i'),
+  //       'time_to' => optional($b->end_at)->format('H:i'),
+  //       'status' => $b->status,
+  //       'attendees' => $b->attendees ?? 0,
+  //       'estimated_total' => (float) ($b->estimated_total ?? 0),
+  //     ];
+  //   });
 
-    return response()->json($data);
-  }
+  //   return response()->json($data);
+  // }
   public function ajaxSearchManager(Request $request)
   {
     try {
@@ -351,11 +380,11 @@ class BookingController extends Controller
           'status' => $b->status,
           'attendees' => $b->attendees ?? 0,
           'estimated_total' => (float) ($b->estimated_total ?? 0),
+          'real_start_at' => $b->status === 'in_progress' ? optional($b->real_start_at)->toIso8601String() : null,
         ];
       });
 
       return response()->json($data);
-
     } catch (\Throwable $e) {
       return response()->json(['error' => $e->getMessage()], 500);
     }
@@ -636,7 +665,32 @@ class BookingController extends Controller
       return back()->withInput()->with('error', 'حدث خطأ أثناء تحديث الحجز. تم تسجيل الخطأ وسيتم مراجعته.');
     }
   }
+  public function updateRealStartTime(Request $request, Booking $booking,)
+  {
 
+    // 1) السماح بالتعديل فقط إذا كانت الحالة in_progress 
+    if (!in_array($booking->status, ['in_progress',])) {
+      return back()->with('error', 'لا يمكن تعديل هذا الحجز لأن حالته ليست "جاري" ');
+    }
+    $data = $request->validate([
+      'real_start_time' => 'required|date',
+    ], [
+
+      'real_start_time.required' => 'يرجى إدخال وقت البداية الفعلي.',
+
+    ]);
+
+    // 3. Update field
+    $booking->real_start_at = $data['real_start_time'];
+    $booking->save();
+
+    if ($request->ajax()) {
+      return response()->json([
+        'status' => 'success',
+        'message' => 'تم تحديث وقت البداية الفعلية بنجاح'
+      ]);
+    }
+  }
 
 
 
@@ -725,7 +779,6 @@ class BookingController extends Controller
       }
 
       return view('bookings.create', compact('halls', 'sameDayBookings'));
-
     } catch (\Throwable $e) {
       return redirect()
         ->route('error.create', ['message' => $e->getMessage()]);
@@ -764,9 +817,11 @@ class BookingController extends Controller
       'duration_minutes' => 'required|integer|min:30',
       'status' => 'nullable|in:scheduled,due,in_progress,finished,cancelled',
       'deposit' => 'nullable|numeric|min:0',
+      'deposit_payment_type' => 'nullable|string',
 
       // recurrence
-      'recurrence_type' => 'nullable|in:none,weekly,biweekly,monthly,custom',
+      // داخل مصفوفة الـ validate
+      'recurrence_type' => 'nullable|in:none,daily,weekly,biweekly,monthly,custom',
       'recurrence_interval' => 'nullable|integer|min:1',
       'recurrence_end_date' => 'nullable|date|after_or_equal:start_at_full',
     ], [
@@ -813,6 +868,7 @@ class BookingController extends Controller
       $recurrenceType = $data['recurrence_type'] ?? 'none';
       $recurrenceInterval = isset($data['recurrence_interval']) ? (int) $data['recurrence_interval'] : 1;
       $recurrenceEnd = isset($data['recurrence_end_date']) ? Carbon::parse($data['recurrence_end_date'])->endOfDay() : null;
+      $paymentType = $data['deposit_payment_type'];
 
       // بناء المواعيد
       $occurrences = $this->generateRecurringDates($start, $end, $recurrenceType, $recurrenceInterval, $recurrenceEnd);
@@ -920,6 +976,7 @@ class BookingController extends Controller
               'add_booking',
               $invoice->id,
               $invoice->total ?? $depositAmount,
+              $paymentType,
               null,
               "اضافة حجز واستلام مقدم"
             );
@@ -946,13 +1003,66 @@ class BookingController extends Controller
       return redirect()
         ->route('bookings.index-manager')
         ->with('success', "تم إضافة {$createdCount} حجز بنجاح.");
-
     } catch (\Throwable $e) {
       DB::rollBack();
       \Log::error('Error creating recurring bookings: ' . $e->getMessage());
       return redirect()
         ->route('error.create', ['message' => $e->getMessage()]);
     }
+  }
+
+  private function generateRecurringDates(Carbon $start, Carbon $end, string $type, int $interval = 1, ?Carbon $recurrenceEnd = null): array
+  {
+    $occurrences = [];
+    $currentStart = $start->copy();
+    $currentEnd = $end->copy();
+
+    if ($type === 'none') {
+      $occurrences[] = ['start' => $currentStart->copy(), 'end' => $currentEnd->copy()];
+      return $occurrences;
+    }
+
+    $maxIterations = 1000;
+    $i = 0;
+
+    while (true) {
+      if ($i++ > $maxIterations) break;
+
+      // التحقق من تاريخ الانتهاء
+      if ($recurrenceEnd && $currentStart->greaterThan($recurrenceEnd)) {
+        break;
+      }
+
+      $occurrences[] = ['start' => $currentStart->copy(), 'end' => $currentEnd->copy()];
+
+      // منطق الحساب بناءً على النوع
+      if ($type === 'daily') {
+        $currentStart->addDays($interval);
+        $currentEnd->addDays($interval);
+      } elseif ($type === 'weekly') {
+        $currentStart->addWeeks($interval);
+        $currentEnd->addWeeks($interval);
+      } elseif ($type === 'biweekly') {
+        $currentStart->addWeeks(2 * $interval);
+        $currentEnd->addWeeks(2 * $interval);
+      } elseif ($type === 'monthly') {
+        $currentStart->addMonthsNoOverflow($interval);
+        $currentEnd->addMonthsNoOverflow($interval);
+      } elseif ($type === 'custom') {
+        // حسب الفورم الخاص بك: custom (كل N أيام)
+        $currentStart->addDays($interval);
+        $currentEnd->addDays($interval);
+      } else {
+        break;
+      }
+
+      // توقف تلقائي لو لم يحدد تاريخ انتهاء لضمان عدم حدوث Loop نهائي
+      if (!$recurrenceEnd && count($occurrences) >= 200) {
+        break;
+      }
+    }
+
+    return $occurrences;
   }
   public function startBookingNow(
     Request $request,
@@ -1172,7 +1282,6 @@ class BookingController extends Controller
       return redirect()
         ->route('bookings.index-manager')
         ->with('success', "تم بدء الجلسة الآن (حجز #{$booking->id}) بنجاح.");
-
     } catch (\Throwable $e) {
       DB::rollBack();
       \Log::error('Error starting booking now: ' . $e->getMessage());
@@ -1181,65 +1290,6 @@ class BookingController extends Controller
     }
   }
 
-
-
-  private function generateRecurringDates(Carbon $start, Carbon $end, string $type, int $interval = 1, ?Carbon $recurrenceEnd = null): array
-  {
-    $occurrences = [];
-    // always include the original
-    $currentStart = $start->copy();
-    $currentEnd = $end->copy();
-
-    // If no recurrence -> just single
-    if ($type === 'none') {
-      $occurrences[] = ['start' => $currentStart->copy(), 'end' => $currentEnd->copy()];
-      return $occurrences;
-    }
-
-    // build loop
-    $maxIterations = 1000; // protection
-    $i = 0;
-
-    while (true) {
-      if ($i++ > $maxIterations)
-        break;
-
-      // stop condition: if recurrenceEnd is set and currentStart date > recurrenceEnd -> break
-      if ($recurrenceEnd && $currentStart->greaterThan($recurrenceEnd))
-        break;
-
-      // push
-      $occurrences[] = ['start' => $currentStart->copy(), 'end' => $currentEnd->copy()];
-
-      // compute next
-      if ($type === 'weekly') {
-        $currentStart->addWeeks($interval);
-        $currentEnd->addWeeks($interval);
-      } elseif ($type === 'biweekly') {
-        $currentStart->addWeeks(2 * $interval); // interval usually 1
-        $currentEnd->addWeeks(2 * $interval);
-      } elseif ($type === 'monthly') {
-        // preserve time of day and day-of-month (careful with months shorter)
-        $currentStart->addMonthsNoOverflow($interval);
-        $currentEnd->addMonthsNoOverflow($interval);
-      } elseif ($type === 'custom') {
-        // custom means every N weeks
-        $currentStart->addWeeks($interval);
-        $currentEnd->addWeeks($interval);
-      } else {
-        // unknown type -> break
-        break;
-      }
-
-      // If no recurrence_end provided, we should decide when to stop.
-      // To avoid infinite loop, we stop after a reasonable number of occurrences (e.g., 200)
-      if (!$recurrenceEnd && count($occurrences) >= 200) {
-        break;
-      }
-    }
-
-    return $occurrences;
-  }
 
   public function sameDay(Request $request)
   {
@@ -1401,12 +1451,29 @@ class BookingController extends Controller
 
 
   // بدء الحجز
+
+
   public function start(Booking $booking)
   {
-    if ($booking->status !== 'scheduled' && $booking->status !== 'due') {
+    // 1️⃣ تحقق من حالة الحجز نفسه
+    if (!in_array($booking->status, ['scheduled', 'due'])) {
       return back()->with('error', 'لا يمكن بدء هذا الحجز.');
     }
 
+    // 2️⃣ تحقق هل في حجز جاري لنفس القاعة
+    $hasActiveBooking = Booking::where('hall_id', $booking->hall_id)
+      ->where('status', 'in_progress')
+      ->where('id', '!=', $booking->id)
+      ->exists();
+
+    if ($hasActiveBooking) {
+      return back()->with(
+        'error',
+        'يوجد حجز جاري بالفعل على هذه القاعة، لا يمكن بدء حجز آخر.'
+      );
+    }
+
+    // 3️⃣ بدء الحجز
     $booking->update([
       'status' => 'in_progress',
       'real_start_at' => Carbon::now(),
@@ -1414,6 +1481,7 @@ class BookingController extends Controller
 
     return back()->with('success', 'تم بدء الحجز بنجاح.');
   }
+
 
 
   // داخل الكلاس BookingController
@@ -1439,13 +1507,51 @@ class BookingController extends Controller
       'hourly_rate' => ['nullable', 'numeric', 'min:0'],
       'booking' => ['required', 'integer', 'exists:bookings,id'],
       'remaining' => ['required', 'numeric'],
+      'payment_type' => ['nullable', 'string'],
     ]);
+    $booking->load('timeSlots');
 
+    // إجمالي الوقت الفعلي بالدقايق
+    $totalMinutes = $booking->real_start_at && $booking->real_end_at
+      ? \Carbon\Carbon::parse($booking->real_start_at)
+      ->diffInMinutes(\Carbon\Carbon::parse($booking->real_end_at))
+      : 0;
+
+    // مجموع الوقت المتقسم
+    $slotsMinutes = $booking->timeSlots->sum(function ($slot) {
+      if ($slot->end_time) {
+        return $slot->start_time->diffInMinutes($slot->end_time);
+      }
+      return 0;
+    });
+
+    // الوقت المتبقي
+    $remainingMinutes = $totalMinutes - $slotsMinutes;
+
+    // 🔴 تحقق 1: في وقت متبقي أكبر من 30 دقيقة
+    if ($remainingMinutes >= 30) {
+      return response()->json([
+        'status' => 'error',
+        'message' => '❌ لا يمكن إنهاء الحساب، يوجد وقت غير مقسم لازم تضيفه في الفترات'
+      ], 422);
+    }
+
+    $invalidSlot = $booking->timeSlots->first(function ($slot) {
+      return !$slot->attendees_count || $slot->attendees_count <= 0;
+    });
+
+    if ($invalidSlot) {
+      return response()->json([
+        'status' => 'error',
+        'message' => '❌ لازم تضيف عدد الأفراد لكل فترة قبل إنهاء الحساب'
+      ], 422);
+    }
     $hoursTotal = floatval($data['hours_total'] ?? 0);
     $purchases = json_decode($data['purchases_json'] ?? '[]', true);
     $depositPaid = floatval($data['deposit_paid'] ?? 0);
     $hourlyRate = floatval($data['hourly_rate'] ?? 0);
     $remaining = floatval($data['remaining'] ?? 0);
+    $payment_type = $data['payment_type'];
     // لو القيمة سالبة خليها 0
     if ($remaining < 0) {
       $remaining = 0;
@@ -1538,17 +1644,19 @@ class BookingController extends Controller
       // ✅ تسجيل الأكشن في الشيفت (لليوزر والأدمن)
       $shiftService->logAction(
         'end_booking',
+
         $invoice->id,
-        $invoiceTotal,
+        $remaining,
+        $payment_type,
+
         null,
-        "انهاء حجز رقم: " . $booking->id
+        "انهاء حجز رقم: " . $booking->client->name
       );
 
       DB::commit();
 
       return redirect()->route('bookings.index-manager')
         ->with('success', 'تم إنهاء الحجز وإنشاء الفاتورة بنجاح.');
-
     } catch (Exception $e) {
       DB::rollBack();
       return redirect()->back()->with('error', 'حدث خطأ أثناء إنهاء الحجز: ' . $e->getMessage());
@@ -1603,7 +1711,7 @@ class BookingController extends Controller
     }
   }
 
-
+  public function saveTimePersonPrice(Request $request) {}
   public function clientBookings(Request $request, $clientId)
   {
     // جلب العميل صريحاً بالـ id (سيعطي 404 إذا غير موجود)
@@ -1744,7 +1852,6 @@ class BookingController extends Controller
         'ongoing' => false,
         'message' => 'لا توجد حجوزات جارية للقاعة المحددة.',
       ], 200);
-
     } catch (\Exception $e) {
       \Log::error('checkOngoing error: ' . $e->getMessage(), [
         'hall_id' => $hallId,
@@ -1756,4 +1863,3 @@ class BookingController extends Controller
     }
   }
 }
-

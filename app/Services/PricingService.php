@@ -4,15 +4,15 @@ namespace App\Services;
 class PricingService
 {
   private float $baseHourPrice = 0.0;
-  private float $extraPersonHourPrice = 0.0;
+  private float $extraPersonHourPrice = 10.0;
 
   /**
    * تحديد سعر الساعة الأساسي وسعر الساعة للفرد الإضافي (اختياري).
    */
-  public function setBase(float $baseHourPrice, ?float $extraPersonHourPrice = null): self
+  public function setBase(float $baseHourPrice, float $extraPersonHourPrice = 10.0): self
   {
     $this->baseHourPrice = $baseHourPrice;
-    $this->extraPersonHourPrice = $extraPersonHourPrice ?? $baseHourPrice / 2;
+    $this->extraPersonHourPrice = $extraPersonHourPrice;
     return $this;
   }
 

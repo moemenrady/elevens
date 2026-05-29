@@ -70,6 +70,7 @@ require __DIR__ . '/bookings.php';
 require __DIR__ . '/daily.php';
 require __DIR__ . '/setion_not_added.php';
 require __DIR__ . '/employee_transactions.php';
+require __DIR__ . '/category.php';
 require __DIR__ . '/employees.php';
 require __DIR__ . '/supervisor.php';
 require __DIR__ . '/products.php';
